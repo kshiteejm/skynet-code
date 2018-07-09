@@ -13,8 +13,6 @@ from gym.utils import seeding
 class SkynetEnv(gym.Env):
 
     def __init__(self):
-        self.__version__ = "0.1.0"
-        self.
-
+        self.observation_space = 
 
         
