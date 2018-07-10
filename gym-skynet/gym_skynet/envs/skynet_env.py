@@ -13,6 +13,12 @@ from gym.utils import seeding
 class SkynetEnv(gym.Env):
 
     def __init__(self):
-        self.observation_space = 
+    	self.num_destinations = 5
+    	self.queue_length = 10
+        self.observation_space = spaces.Box(1, self.num_destinations, shape=(self.queue_length,))
+        self.action_space = spaces.Discrete(self.num_destinations)
 
-        
+  	def step(self, action):
+  		assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
+  		state = self.state
+
