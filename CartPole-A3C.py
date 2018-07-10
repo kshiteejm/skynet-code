@@ -12,13 +12,15 @@ import numpy as np
 import tensorflow as tf
 
 import gym, time, random, threading
+import gym_skynet
 
 from keras.models import *
 from keras.layers import *
 from keras import backend as K
 
 #-- constants
-ENV = 'CartPole-v0'
+# ENV = 'CartPole-v0'
+ENV = 'Skynet-v0'
 
 RUN_TIME = 30
 THREADS = 8
