@@ -28,13 +28,14 @@ OPTIMIZERS = 2
 THREAD_DELAY = 0.001
 
 GAMMA = 0.99
+# GAMMA = 0.01
 
 N_STEP_RETURN = 8
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
 EPS_START = 0.4
 EPS_STOP  = .15
-EPS_STEPS = 75000
+EPS_STEPS = 100
 
 MIN_BATCH = 32
 LEARNING_RATE = 5e-3
@@ -273,7 +274,7 @@ class Optimizer(threading.Thread):
 		self.stop_signal = True
 
 #-- main
-env_test = Environment(render=True, eps_start=0., eps_end=0.)
+env_test = Environment(render=False, eps_start=0., eps_end=0.)
 NUM_STATE = env_test.env.observation_space.shape[0]
 NUM_ACTIONS = env_test.env.action_space.n
 NONE_STATE = np.zeros(NUM_STATE)
