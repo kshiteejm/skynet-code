@@ -34,7 +34,7 @@ class SkynetEnv(gym.Env):
         if pkt_dst == action:
             reward = 1.0
         done = False
-        self.max_steps = self.max_steps - 1
+        # self.max_steps = self.max_steps - 1
         if self.max_steps == 0:
             done = True
         return np.array(self.state), reward, done, {}

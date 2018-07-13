@@ -27,15 +27,15 @@ THREADS = 8
 OPTIMIZERS = 2
 THREAD_DELAY = 0.001
 
-GAMMA = 0.99
-# GAMMA = 0.01
+# GAMMA = 0.99
+GAMMA = 0.01
 
 N_STEP_RETURN = 8
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
 EPS_START = 0.4
-EPS_STOP  = .15
-EPS_STEPS = 100
+EPS_STOP  = .01
+EPS_STEPS = 800
 
 MIN_BATCH = 32
 LEARNING_RATE = 5e-3
@@ -304,3 +304,5 @@ for o in opts:
 
 print("Training finished")
 env_test.run()
+time.sleep(RUN_TIME)
+env_test.stop()
