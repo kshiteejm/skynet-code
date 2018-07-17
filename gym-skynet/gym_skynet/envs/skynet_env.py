@@ -13,10 +13,10 @@ import numpy as np
 
 class SkynetEnv(gym.Env):
 
-    def __init__(self):
+    def __init__(self, num_dests=5, q_len=10):
         self.__version__ = "0.1.0"
-        self.num_destinations = 5
-        self.queue_length = 10
+        self.num_destinations = num_dests
+        self.queue_length = q_len
         self.max_steps = 100
         self.observation_space = spaces.Box(0, self.num_destinations - 1, shape=(self.queue_length,), dtype=np.int64)
         self.action_space = spaces.Discrete(self.num_destinations)
