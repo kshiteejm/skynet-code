@@ -19,10 +19,9 @@ from keras.layers import *
 from keras import backend as K
 
 #-- constants
-# ENV = 'CartPole-v0'
 ENV = 'Skynet-v0'
 
-RUN_TIME = 240
+RUN_TIME = 30
 THREADS = 8
 OPTIMIZERS = 2
 THREAD_DELAY = 0.001
@@ -230,6 +229,7 @@ class Environment(threading.Thread):
 
 		self.render = render
 		self.env = gym.make(ENV)
+		self.env.__init__(num_dests=2, max_q_len=1)
 		self.agent = Agent(eps_start, eps_end, eps_steps)
 
 	def runEpisode(self):
@@ -286,6 +286,8 @@ class Optimizer(threading.Thread):
 		self.stop_signal = True
 
 #-- main
+NUM_SWITCHES = 4
+
 env_test = Environment(render=False, eps_start=0., eps_end=0.)
 NUM_STATE = env_test.env.observation_space.shape[0]
 NUM_ACTIONS = env_test.env.action_space.n
