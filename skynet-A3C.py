@@ -28,6 +28,7 @@ THREAD_DELAY = 0.001
 
 # GAMMA = 0.99
 GAMMA = 0.1
+# GAMMA = 0.7
 
 N_STEP_RETURN = 1
 GAMMA_N = GAMMA ** N_STEP_RETURN
@@ -36,7 +37,7 @@ EPS_START = 0.4
 EPS_STOP  = 0.0
 # EPS_START = 0.
 # EPS_STOP  = 0.
-EPS_STEPS = 2000
+EPS_STEPS = 12000
 
 MIN_BATCH = 32
 LEARNING_RATE = 5e-3
@@ -118,6 +119,7 @@ class Brain:
 
 		v = self.predict_v(s_)
 		r = r + GAMMA_N * v * s_mask	# set v to 0 where s_ is terminal state
+		# print r
 		
 		s_t, a_t, r_t, minimize = self.graph
 		self.session.run(minimize, feed_dict={s_t: s, a_t: a, r_t: r})
@@ -161,6 +163,8 @@ class Agent:
 		self.memory = []	# used for n_step return
 		self.R = 0.
 		self.R_rand = 0.
+		self.R_ = 0.
+		self.num_steps = 0
 
 	def getEpsilon(self):
 		if(frames >= self.eps_steps):
@@ -199,6 +203,12 @@ class Agent:
 		self.memory.append( (s, a_cats, r, s_) )
 
 		self.R = ( self.R + r * GAMMA_N ) / GAMMA
+		self.R_ = self.R_ + r
+		self.num_steps = self.num_steps + 1
+		if self.num_steps >= 300:
+			print self.R_
+			self.R_ = 0.
+			self.num_steps = 0
 
 		if s_ is None:
 			while len(self.memory) > 0:
@@ -213,6 +223,7 @@ class Agent:
 
 		if len(self.memory) >= N_STEP_RETURN:
 			s, a, r, s_ = get_sample(self.memory, N_STEP_RETURN)
+			# print r
 			brain.train_push(s, a, r, s_)
 
 			self.R = self.R - self.memory[0][2]
@@ -229,7 +240,7 @@ class Environment(threading.Thread):
 
 		self.render = render
 		self.env = gym.make(ENV)
-		self.env.__init__(num_dests=2, max_q_len=1)
+		self.env.__init__(topo_size=2, num_flows=1)
 		self.agent = Agent(eps_start, eps_end, eps_steps)
 
 	def runEpisode(self):
