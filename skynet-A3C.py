@@ -26,11 +26,11 @@ THREADS = 8
 OPTIMIZERS = 2
 THREAD_DELAY = 0.001
 
-# GAMMA = 0.99
-GAMMA = 0.1
+GAMMA = 0.99
+# GAMMA = 0.1
 # GAMMA = 0.7
 
-N_STEP_RETURN = 1
+N_STEP_RETURN = 5
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
 EPS_START = 0.4
@@ -65,10 +65,10 @@ class Brain:
 
 	def _build_model(self):
 
-		l_input = Input( batch_shape=(None, NUM_STATE) )
+		l_input = Input(batch_shape=(None, STATE[0]*STATE[1]))
 		l_dense = Dense(16, activation='relu')(l_input)
 
-		out_actions = Dense(NUM_ACTIONS, activation='softmax')(l_dense)
+		out_actions = Dense(ACTION.high[0]*ACTION.high[1], activation='softmax')(l_dense)
 		out_value   = Dense(1, activation='linear')(l_dense)
 
 		model = Model(inputs=[l_input], outputs=[out_actions, out_value])
@@ -77,8 +77,8 @@ class Brain:
 		return model
 
 	def _build_graph(self, model):
-		s_t = tf.placeholder(tf.float32, shape=(None, NUM_STATE))
-		a_t = tf.placeholder(tf.float32, shape=(None, NUM_ACTIONS))
+		s_t = tf.placeholder(tf.float32, shape=(None, STATE[0]*STATE[1]))
+		a_t = tf.placeholder(tf.float32, shape=(None, ACTION.high[0]*ACTION.high[1]))
 		r_t = tf.placeholder(tf.float32, shape=(None, 1)) # not immediate, but discounted n step reward
 		
 		p, v = model(s_t)
@@ -114,6 +114,9 @@ class Brain:
 		r = np.vstack(r)
 		s_ = np.vstack(s_)
 		s_mask = np.vstack(s_mask)
+		# print s.shape
+		# print a.shape
+		# print a
 
 		if len(s) > 5*MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(s))
 
@@ -126,15 +129,16 @@ class Brain:
 
 	def train_push(self, s, a, r, s_):
 		with self.lock_queue:
-			self.train_queue[0].append(s)
-			self.train_queue[1].append(a)
+			self.train_queue[0].append(s.reshape(-1))
+			self.train_queue[1].append(a.reshape(-1))
+			# self.train_queue[1].append(ACTION.high[1]*(a[0]-1) + (a[1] - 1))
 			self.train_queue[2].append(r)
 
 			if s_ is None:
-				self.train_queue[3].append(NONE_STATE)
+				self.train_queue[3].append(NO_STATE.reshape(-1))
 				self.train_queue[4].append(0.)
 			else:	
-				self.train_queue[3].append(s_)
+				self.train_queue[3].append(s_.reshape(-1))
 				self.train_queue[4].append(1.)
 
 	def predict(self, s):
@@ -144,12 +148,12 @@ class Brain:
 
 	def predict_p(self, s):
 		with self.default_graph.as_default():
-			p, v = self.model.predict(s)		
+			p, v = self.model.predict(s)
 			return p
 
 	def predict_v(self, s):
 		with self.default_graph.as_default():
-			p, v = self.model.predict(s)		
+			p, v = self.model.predict(s)
 			return v
 
 #---------
@@ -178,17 +182,22 @@ class Agent:
 
 		if random.random() < eps:
 			self.R_rand = self.R_rand + 1
-			return random.randint(0, NUM_ACTIONS-1), True
-
+			action = (random.randint(1, ACTION.high[0]), random.randint(1, ACTION.high[1]))
+			while (s[action[0]-1][action[1]-1] != 0):
+				action = (random.randint(1, ACTION.high[0]), random.randint(1, ACTION.high[1]))
+			return action, True
 		else:
-			s = np.array([s])
-			p = brain.predict_p(s)[0]
+			s_ = np.array([s.reshape(-1).tolist()])
+			p = brain.predict_p(s_)[0]
 			# print p
 
-			a = np.argmax(p)
-			# a = np.random.choice(NUM_ACTIONS, p=p)
-
-			return a, False
+			# a = np.argmax(p)
+			a = np.random.choice(ACTION.high[0]*ACTION.high[1], p=p)
+			action = (a/ACTION.high[1] + 1, a%ACTION.high[1]+1)
+			while (s[action[0]-1][action[1]-1] != 0):
+				a = np.random.choice(ACTION.high[0]*ACTION.high[1], p=p)
+				action = (a/ACTION.high[1] + 1, a%ACTION.high[1]+1)
+			return action, False
 	
 	def train(self, s, a, r, s_):
 		def get_sample(memory, n):
@@ -197,10 +206,13 @@ class Agent:
 
 			return s, a, self.R, s_
 
-		a_cats = np.zeros(NUM_ACTIONS)	# turn action into one-hot representation
-		a_cats[a] = 1 
+		a_cats = np.zeros((ACTION.high[0], ACTION.high[1]))	# turn action into one-hot representation
+		a_cats[a[0]-1][a[1]-1] = 1
+		# a_cats = a_cats.reshape(-1)
+		# print a_cats.shape
 
 		self.memory.append( (s, a_cats, r, s_) )
+		# self.memory.append( (s, a, r, s_) )
 
 		self.R = ( self.R + r * GAMMA_N ) / GAMMA
 		self.R_ = self.R_ + r
@@ -240,7 +252,7 @@ class Environment(threading.Thread):
 
 		self.render = render
 		self.env = gym.make(ENV)
-		self.env.__init__(topo_size=2, num_flows=1)
+		self.env.__init__(topo_size=4, num_flows=10)
 		self.agent = Agent(eps_start, eps_end, eps_steps)
 
 	def runEpisode(self):
@@ -257,6 +269,7 @@ class Environment(threading.Thread):
 			s_, r, done, info = self.env.step(a)
 
 			if done: # terminal state
+				# print s_
 				s_ = None
 
 			self.agent.train(s, a, r, s_)
@@ -297,12 +310,12 @@ class Optimizer(threading.Thread):
 		self.stop_signal = True
 
 #-- main
-NUM_SWITCHES = 4
-
 env_test = Environment(render=False, eps_start=0., eps_end=0.)
-NUM_STATE = env_test.env.observation_space.shape[0]
-NUM_ACTIONS = env_test.env.action_space.n
-NONE_STATE = np.zeros(NUM_STATE)
+STATE = env_test.env.observation_space.shape # 2D array shape with 0 or 1
+print "State: %d, %d" % (STATE[0], STATE[1])
+ACTION = env_test.env.action_space # a tuple with non-zero inputs
+print "Action: %d, %d" % (ACTION.high[0], ACTION.high[1])
+NO_STATE = np.zeros(STATE)
 
 brain = Brain()	# brain is global in A3C
 

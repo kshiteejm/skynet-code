@@ -134,7 +134,7 @@ class SkynetEnv(gym.Env):
         # assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
         flow_id, link_id = action
         done = False
-        reward = 0.0
+        reward = -0.01
         flow_switches = self.flow_details[flow_id]
         # if flow_id in self.completed_flows or state[flow_id-1][link_id-1] == 1: # this should not be happening
         self.state[flow_id-1][link_id-1] = 1
@@ -147,7 +147,8 @@ class SkynetEnv(gym.Env):
                 if flow_switches[0] in group and flow_switches[1] in group:
                     self.completed_flows.append(flow_id)
                     reward = 1.0
-                    done = True
+                    if len(self.completed_flows) == self.num_flows:
+                        done = True
         return np.array(self.state), reward, done, {}
 
     def render(self, mode='human'):
