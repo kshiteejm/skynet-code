@@ -1,4 +1,4 @@
-# borrowed from Jaromir Janisch, 2017
+# some code fragments borrowed from Jaromir Janisch, 2017
 
 import numpy as np
 import tensorflow as tf
