@@ -1,12 +1,4 @@
-# OpenGym CartPole-v0 with A3C on GPU
-# -----------------------------------
-#
-# A3C implementation with GPU optimizer threads.
-# 
-# Made as part of blog series Let's make an A3C, available at
-# https://jaromiru.com/2017/02/16/lets-make-an-a3c-theory/
-#
-# author: Jaromir Janisch, 2017
+# borrowed from Jaromir Janisch, 2017
 
 import numpy as np
 import tensorflow as tf
@@ -218,7 +210,7 @@ class Agent:
 		self.R_ = self.R_ + r
 		self.num_steps = self.num_steps + 1
 		if self.num_steps >= 300:
-			print self.R_
+			# print self.R_
 			self.R_ = 0.
 			self.num_steps = 0
 
@@ -271,6 +263,12 @@ class Environment(threading.Thread):
 			if done: # terminal state
 				# print s_
 				s_ = None
+				if r > 0:
+					self.stop_signal = True
+					global time_begin
+					time_now = time.time()
+					print "EXECUTION TIME: %d" % (time_now - time_begin)
+					break
 
 			self.agent.train(s, a, r, s_)
 
@@ -285,8 +283,8 @@ class Environment(threading.Thread):
 			if done or self.stop_signal:
 				break
 
-		print("Total R:", R)
-		print("Total R_neg:", R_neg)
+		# print("Total R:", R)
+		# print("Total R_neg:", R_neg)
 
 	def run(self):
 		while not self.stop_signal:
@@ -312,9 +310,9 @@ class Optimizer(threading.Thread):
 #-- main
 env_test = Environment(render=False, eps_start=0., eps_end=0.)
 STATE = env_test.env.observation_space.shape # 2D array shape with 0 or 1
-print "State: %d, %d" % (STATE[0], STATE[1])
+# print "State: %d, %d" % (STATE[0], STATE[1])
 ACTION = env_test.env.action_space # a tuple with non-zero inputs
-print "Action: %d, %d" % (ACTION.high[0], ACTION.high[1])
+# print "Action: %d, %d" % (ACTION.high[0], ACTION.high[1])
 NO_STATE = np.zeros(STATE)
 
 brain = Brain()	# brain is global in A3C
@@ -324,6 +322,24 @@ opts = [Optimizer() for i in range(OPTIMIZERS)]
 
 for o in opts:
 	o.start()
+
+time_begin = time.time()
+
+for e in envs:
+	e.start()
+
+time.sleep(RUN_TIME)
+
+for e in envs:
+	e.stop()
+for e in envs:
+	e.join()
+
+print "SECOND INSTANCE"
+
+envs = [Environment() for i in range(THREADS)]
+
+time_begin = time.time()
 
 for e in envs:
 	e.start()
@@ -342,7 +358,7 @@ for o in opts:
 
 print("Training finished")
 
-env_test.start()
-time.sleep(30)
-env_test.stop()
-env_test.join()
+# env_test.start()
+# time.sleep(30)
+# env_test.stop()
+# env_test.join()
