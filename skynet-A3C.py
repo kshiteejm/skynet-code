@@ -13,8 +13,8 @@ from keras import backend as K
 #-- constants
 ENV = 'Skynet-v0'
 
-RUN_TIME = 30
-THREADS = 8
+RUN_TIME = 60
+THREADS = 2
 OPTIMIZERS = 2
 THREAD_DELAY = 0.001
 
@@ -37,6 +37,8 @@ LEARNING_RATE = 5e-3
 LOSS_V = .5			# v loss coefficient
 LOSS_ENTROPY = .01 	# entropy coefficient
 
+MODEL_VERSION = 1	# state-dependent
+
 #---------
 class Brain:
 	train_queue = [ [], [], [], [], [] ]	# s, a, r, s', s' terminal mask
@@ -45,37 +47,41 @@ class Brain:
 	def __init__(self):
 		self.session = tf.Session()
 		K.set_session(self.session)
-		K.manual_variable_initialization(True)
+		K.manual_variable_initialization(True) # what happens here?
 
-		self.model = self._build_model()
-		self.graph = self._build_graph(self.model)
+		self.model = self._build_model_1()
+		self.graph = self._build_graph_1(self.model)
 
 		self.session.run(tf.global_variables_initializer())
 		self.default_graph = tf.get_default_graph()
 
 		self.default_graph.finalize()	# avoid modifications
 
-	def _build_model(self):
+	def _build_model_1(self):
 
-		l_input = Input(batch_shape=(None, STATE[0]*STATE[1]))
-		l_dense = Dense(16, activation='relu')(l_input)
+		# input layer dimensions: number of flows * number of links
+		l_input = Input(batch_shape=(None, int(STATE[0])*int(STATE[1])))
+		l_dense_1 = Dense(32, activation='relu')(l_input)
+		l_dense_2 = Dense(16, activation='relu')(l_dense_1)
 
-		out_actions = Dense(ACTION.high[0]*ACTION.high[1], activation='softmax')(l_dense)
-		out_value   = Dense(1, activation='linear')(l_dense)
+		# output layer dimensions: number of flows * number of links
+		out_actions = Dense(int(ACTION.high[0])*int(ACTION.high[1]), activation='softmax')(l_dense_2)
+		out_value   = Dense(1, activation='linear')(l_dense_2)
 
 		model = Model(inputs=[l_input], outputs=[out_actions, out_value])
 		model._make_predict_function()	# have to initialize before threading
+		# print model.summary()
 
 		return model
 
-	def _build_graph(self, model):
-		s_t = tf.placeholder(tf.float32, shape=(None, STATE[0]*STATE[1]))
-		a_t = tf.placeholder(tf.float32, shape=(None, ACTION.high[0]*ACTION.high[1]))
+	def _build_graph_1(self, model):
+		s_t = tf.placeholder(tf.float32, shape=(None, int(STATE[0])*int(STATE[1])))
+		a_t = tf.placeholder(tf.float32, shape=(None, int(ACTION.high[0])*int(ACTION.high[1])))
 		r_t = tf.placeholder(tf.float32, shape=(None, 1)) # not immediate, but discounted n step reward
 		
 		p, v = model(s_t)
 
-		log_prob = tf.log( tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10)
+		log_prob = tf.log(tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10)
 		advantage = r_t - v
 
 		loss_policy = - log_prob * tf.stop_gradient(advantage)									# maximize policy
@@ -151,10 +157,11 @@ class Brain:
 #---------
 frames = 0
 class Agent:
-	def __init__(self, eps_start, eps_end, eps_steps):
+	def __init__(self, eps_start, eps_end, eps_steps, env):
 		self.eps_start = eps_start
 		self.eps_end   = eps_end
 		self.eps_steps = eps_steps
+		self.env = env
 
 		self.memory = []	# used for n_step return
 		self.R = 0.
@@ -174,21 +181,24 @@ class Agent:
 
 		if random.random() < eps:
 			self.R_rand = self.R_rand + 1
-			action = (random.randint(1, ACTION.high[0]), random.randint(1, ACTION.high[1]))
-			while (s[action[0]-1][action[1]-1] != 0):
-				action = (random.randint(1, ACTION.high[0]), random.randint(1, ACTION.high[1]))
+			# action = (random.randint(1, ACTION.high[0]), random.randint(1, ACTION.high[1]))
+			# while (s[action[0]-1][action[1]-1] != 0):
+			# 	action = (random.randint(1, ACTION.high[0]), random.randint(1, ACTION.high[1]))
+			action = self.env.get_random_action()
 			return action, True
 		else:
 			s_ = np.array([s.reshape(-1).tolist()])
 			p = brain.predict_p(s_)[0]
-			# print p
 
-			# a = np.argmax(p)
-			a = np.random.choice(ACTION.high[0]*ACTION.high[1], p=p)
-			action = (a/ACTION.high[1] + 1, a%ACTION.high[1]+1)
-			while (s[action[0]-1][action[1]-1] != 0):
-				a = np.random.choice(ACTION.high[0]*ACTION.high[1], p=p)
-				action = (a/ACTION.high[1] + 1, a%ACTION.high[1]+1)
+			# # a = np.argmax(p)
+			# a = np.random.choice(ACTION.high[0]*ACTION.high[1], p=p)
+			# action = (a/ACTION.high[1] + 1, a%ACTION.high[1]+1)
+			# while (s[action[0]-1][action[1]-1] != 0):
+			# 	a = np.random.choice(ACTION.high[0]*ACTION.high[1], p=p)
+			# 	action = (a/ACTION.high[1] + 1, a%ACTION.high[1]+1)
+			# print p
+			p = p.reshape((int(ACTION.high[0]), int(ACTION.high[1])))
+			action = self.env.get_random_action(p=p)
 			return action, False
 	
 	def train(self, s, a, r, s_):
@@ -198,7 +208,7 @@ class Agent:
 
 			return s, a, self.R, s_
 
-		a_cats = np.zeros((ACTION.high[0], ACTION.high[1]))	# turn action into one-hot representation
+		a_cats = np.zeros((int(ACTION.high[0]), int(ACTION.high[1])))	# turn action into one-hot representation
 		a_cats[a[0]-1][a[1]-1] = 1
 		# a_cats = a_cats.reshape(-1)
 		# print a_cats.shape
@@ -221,7 +231,7 @@ class Agent:
 				brain.train_push(s, a, r, s_)
 
 				self.R = ( self.R - self.memory[0][2] ) / GAMMA
-				self.memory.pop(0)		
+				self.memory.pop(0)
 
 			self.R = 0
 
@@ -237,17 +247,28 @@ class Agent:
 		
 #---------
 class Environment(threading.Thread):
-	stop_signal = False
+	# stop_signal = False
 
 	def __init__(self, render=False, eps_start=EPS_START, eps_end=EPS_STOP, eps_steps=EPS_STEPS):
 		threading.Thread.__init__(self)
 
+		self.reset()
+
+		# self.stop_signal = False
+		# self.render = render
+		# self.env = gym.make(ENV)
+		# self.env.__init__(topo_size=4, num_flows=100)
+		# self.agent = Agent(eps_start, eps_end, eps_steps, self.env)
+	
+	def reset(self, render=False, eps_start=EPS_START, eps_end=EPS_STOP, eps_steps=EPS_STEPS):
+		self.stop_signal = False
 		self.render = render
 		self.env = gym.make(ENV)
-		self.env.__init__(topo_size=4, num_flows=10)
-		self.agent = Agent(eps_start, eps_end, eps_steps)
+		self.env.__init__(topo_size=4, num_flows=100)
+		self.agent = Agent(eps_start, eps_end, eps_steps, self.env)
+		self.time_begin = time.time()
 
-	def runEpisode(self):
+	def runEpisode(self, hard_reset = False):
 		s = self.env.reset()
 
 		R = 0
@@ -258,16 +279,18 @@ class Environment(threading.Thread):
 			if self.render: self.env.render()
 
 			a, is_rand = self.agent.act(s)
+			# print a
 			s_, r, done, info = self.env.step(a)
 
 			if done: # terminal state
 				# print s_
 				s_ = None
 				if r > 0:
-					self.stop_signal = True
-					global time_begin
+					if not self.env.is_game_over:
+						self.stop_signal = True
+					# global time_begin
 					time_now = time.time()
-					print "EXECUTION TIME: %d" % (time_now - time_begin)
+					print "EXECUTION TIME: %d" % (time_now - self.time_begin)
 					break
 
 			self.agent.train(s, a, r, s_)
@@ -287,8 +310,14 @@ class Environment(threading.Thread):
 		# print("Total R_neg:", R_neg)
 
 	def run(self):
-		while not self.stop_signal:
-			self.runEpisode()
+		# while not self.stop_signal:
+		# 	self.runEpisode()
+		while True:
+			if not self.stop_signal:
+				self.runEpisode()
+			else:
+				self.reset()
+				self.runEpisode()
 
 	def stop(self):
 		self.stop_signal = True
