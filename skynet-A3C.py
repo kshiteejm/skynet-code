@@ -36,7 +36,7 @@ MODEL_VERSION = 1	# state-dependent
 
 #---------
 class Brain:
-	train_queue = [ [], [], [], [], [] ]	# s, a, r, s', s' terminal mask
+	train_queue = [ [[], [], []], [], [], [[], [], []], [] ]	# s, a, r, s', s' terminal mask
 	lock_queue = threading.Lock()
 
 	def __init__(self):
@@ -84,9 +84,10 @@ class Brain:
 		# out_value   = Dense(1, activation='linear')(l_dense_2)
 
 		# model = Model(inputs=[l_input], outputs=[out_actions, out_value])
-		# model._make_predict_function()	# have to initialize before threading
+
+		model._make_predict_function()	# have to initialize before threading
 		
-		print model.summary()
+		# print model.summary()
 
 		return model
 
@@ -104,10 +105,10 @@ class Brain:
 		action_t = tf.placeholder(tf.float32, shape=(None, self.action_shape_height, self.action_shape_width))
 		reward_t = tf.placeholder(tf.float32, shape=(None, 1))
 
-		prob, avg_value = model([topo_t, routes_t, reach_t])
+		prob, avg_reward = model([topo_t, routes_t, reach_t])
 
 		log_prob = tf.log(tf.reduce_sum(prob * action_t, axis=1, keep_dims=True) + 1e-10)
-		advantage = reward_t - avg_value
+		advantage = reward_t - avg_reward
 
 		loss_policy = - log_prob * tf.stop_gradient(advantage)									# maximize policy
 		loss_value  = LOSS_V * tf.square(advantage)												# minimize value error
@@ -131,54 +132,72 @@ class Brain:
 
 			state, action, reward, state_, state_mask = self.train_queue
 			# s, a, r, s_, s_mask = self.train_queue
-			self.train_queue = [ [], [], [], [], [] ]
+			self.train_queue = [ [[], [], []], [], [], [[], [], []], [] ]
 
-		state = np.vstack(state)
+		state_topo = np.vstack(state[0])
+		state_routes = np.vstack(state[1])
+		state_reach = np.vstack(state[2])
 		action = np.vstack(action)
 		reward = np.vstack(reward)
-		state_ = np.vstack(state_)
+		state_topo_ = np.vstack(state_[0])
+		state_routes_ = np.vstack(state_[1])
+		state_reach_ = np.vstack(state_[2])
 		state_mask = np.vstack(state_mask)
 		# print s.shape
 		# print a.shape
 		# print a
 
-		if len(s) > 5*MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(s))
+		if len(state_topo) > 5*MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(state_topo))
 
-		v = self.predict_v(s_)
-		r = r + GAMMA_N * v * s_mask	# set v to 0 where s_ is terminal state
+		avg_reward = self.predict_avg_reward(np.array([state_topo_, state_routes_, state_reach_]))
+		reward = reward + GAMMA_N * avg_reward * state_mask	# set v to 0 where s_ is terminal state
 		# print r
 		
-		s_t, a_t, r_t, minimize = self.graph
-		self.session.run(minimize, feed_dict={s_t: s, a_t: a, r_t: r})
+		topo_t, routes_t, reach_t, action_t, reward_t, minimize = self.graph
+		self.session.run(minimize, feed_dict={topo_t: state_topo, routes_t: state_routes, reach_t: state_reach, action_t: action, reward_t: reward})
 
-	def train_push(self, s, a, r, s_):
+	def train_push(self, state, action, reward, state_):
 		with self.lock_queue:
-			self.train_queue[0].append(s.reshape(-1))
-			self.train_queue[1].append(a.reshape(-1))
-			# self.train_queue[1].append(ACTION.high[1]*(a[0]-1) + (a[1] - 1))
-			self.train_queue[2].append(r)
+			self.train_queue[0][0].append(state["topology"])
+			self.train_queue[0][1].append(state["routes"])
+			self.train_queue[0][2].append(state["reachability"])
+			self.train_queue[1].append(action)
+			self.train_queue[2].append(reward)
 
-			if s_ is None:
-				self.train_queue[3].append(NO_STATE.reshape(-1))
+			if state_ is None:
+				self.train_queue[3][0].append(NULL_STATE["topology"])
+				self.train_queue[3][1].append(NULL_STATE["routes"])
+				self.train_queue[3][2].append(NULL_STATE["reachability"])
 				self.train_queue[4].append(0.)
 			else:	
-				self.train_queue[3].append(s_.reshape(-1))
+				self.train_queue[3][0].append(state_["topology"])
+				self.train_queue[3][1].append(state_["routes"])
+				self.train_queue[3][2].append(state_["reachability"])
 				self.train_queue[4].append(1.)
 
-	def predict(self, s):
+	def predict(self, state):
 		with self.default_graph.as_default():
-			p, v = self.model.predict(s)
-			return p, v
+			prob, avg_reward = self.model.predict(state)
+			return prob, avg_reward
 
-	def predict_p(self, s):
+	def predict_prob(self, state):
 		with self.default_graph.as_default():
-			p, v = self.model.predict(s)
-			return p
+			# print state[0].shape
+			# print state[1].shape
+			# print state[2].shape
+			prob, avg_reward = self.model.predict(state)
+			return prob
 
-	def predict_v(self, s):
+	# def predict_prob(self, topo, routes, reach):
+	# 	with self.default_graph.as_default():
+	# 		# print state.shape
+	# 		prob, avg_reward = self.model.predict(topo, routes, reach)
+	# 		return prob
+
+	def predict_avg_reward(self, state):
 		with self.default_graph.as_default():
-			p, v = self.model.predict(s)
-			return v
+			prob, avg_reward = self.model.predict(state)
+			return avg_reward
 
 #---------
 frames = 0
@@ -191,7 +210,9 @@ class Agent:
 
 		self.memory = []	# used for n_step return
 		self.R = 0.
-		self.num_steps = 0
+
+		self.action_shape_height = int(self.env.action_space.high[0])
+		self.action_shape_width = int(self.env.action_space.high[1])
 
 	def getEpsilon(self):
 		if frames >= self.eps_steps:
@@ -199,7 +220,7 @@ class Agent:
 		else:
 			return self.eps_start + frames * (self.eps_end - self.eps_start) / self.eps_steps	# linearly interpolate
 
-	def act(self, s):
+	def act(self, state):
 		eps = self.getEpsilon()			
 		global frames; frames = frames + 1
 
@@ -210,8 +231,11 @@ class Agent:
 			action = self.env.get_random_action()
 			return action, True
 		else:
-			s_ = np.array([s.reshape(-1).tolist()])
-			p = brain.predict_p(s_)[0]
+			# state_ = np.array([s.reshape(-1).tolist()])
+			topo = np.array([state["topology"]])
+			routes = np.array([state["routes"]])
+			reach = np.array([state["reachability"]])
+			prob = brain.predict_prob([topo, routes, reach])[0]
 
 			# # a = np.argmax(p)
 			# a = np.random.choice(ACTION.high[0]*ACTION.high[1], p=p)
@@ -220,33 +244,31 @@ class Agent:
 			# 	a = np.random.choice(ACTION.high[0]*ACTION.high[1], p=p)
 			# 	action = (a/ACTION.high[1] + 1, a%ACTION.high[1]+1)
 			# print p
-			p = p.reshape((int(ACTION.high[0]), int(ACTION.high[1])))
-			action = self.env.get_random_action(p=p)
+			# p = p.reshape((int(ACTION.high[0]), int(ACTION.high[1])))
+			action = self.env.get_random_action(p=prob)
 			return action, False
 	
-	def train(self, s, a, r, s_):
+	def train(self, state, action, reward, state_):
 		def get_sample(memory, n):
-			s, a, _, _  = memory[0]
-			_, _, _, s_ = memory[n-1]
+			state, action, _, _  = memory[0]
+			_, _, _, state_ = memory[n-1]
 
-			return s, a, self.R, s_
+			return state, action, self.R, state_
 
-		a_cats = np.zeros((int(ACTION.high[0]), int(ACTION.high[1])))	# turn action into one-hot representation
-		a_cats[a[0]-1][a[1]-1] = 1
-		# a_cats = a_cats.reshape(-1)
-		# print a_cats.shape
+		flow_id = action[0]
+		switch_id = action[1]
+		action_one_hot_encoded = np.zeros((self.action_shape_height, self.action_shape_width))
+		action_one_hot_encoded[flow_id - 1][switch_id - 1] = 1
 
-		self.memory.append( (s, a_cats, r, s_) )
-		# self.memory.append( (s, a, r, s_) )
+		self.memory.append( (state, action_one_hot_encoded, reward, state_) )
 
-		self.R = ( self.R + r * GAMMA_N ) / GAMMA
-		self.num_steps = self.num_steps + 1
+		self.R = ( self.R + reward * GAMMA_N ) / GAMMA
 
-		if s_ is None:
+		if state_ is None:
 			while len(self.memory) > 0:
 				n = len(self.memory)
-				s, a, r, s_ = get_sample(self.memory, n)
-				brain.train_push(s, a, r, s_)
+				state, action, reward, state_ = get_sample(self.memory, n)
+				brain.train_push(state, action, reward, state_)
 
 				self.R = ( self.R - self.memory[0][2] ) / GAMMA
 				self.memory.pop(0)
@@ -254,9 +276,8 @@ class Agent:
 			self.R = 0
 
 		if len(self.memory) >= N_STEP_RETURN:
-			s, a, r, s_ = get_sample(self.memory, N_STEP_RETURN)
-			# print r
-			brain.train_push(s, a, r, s_)
+			state, action, reward, state_ = get_sample(self.memory, N_STEP_RETURN)
+			brain.train_push(state, action, reward, state_)
 
 			self.R = self.R - self.memory[0][2]
 			self.memory.pop(0)	
@@ -287,45 +308,33 @@ class Environment(threading.Thread):
 		self.time_begin = time.time()
 
 	def runEpisode(self, hard_reset = False):
-		s = self.env.reset()
+		state = self.env.reset()
 
-		R = 0
-		R_neg = 0
 		while True:         
 			time.sleep(THREAD_DELAY) # yield 
 
 			if self.render: self.env.render()
 
-			a, is_rand = self.agent.act(s)
+			action, is_rand = self.agent.act(state)
 			# print a
-			s_, r, done, info = self.env.step(a)
+			state_, reward, done, info = self.env.step(action)
 
 			if done: # terminal state
-				# print s_
-				s_ = None
-				if r > 0:
+				# print state_
+				state_ = None
+				if reward > 0:
 					if not self.env.is_game_over:
 						self.stop_signal = True
-					# global time_begin
 					time_now = time.time()
 					print "EXECUTION TIME: %d" % (time_now - self.time_begin)
 					break
 
-			self.agent.train(s, a, r, s_)
+			self.agent.train(state, action, reward, state_)
 
-			s = s_
-			if not is_rand:
-				if r < -0.5:
-					R_neg = R_neg + 1
-					R += -1.0
-				else:
-					R += 1.0
+			state = state_
 
 			if done or self.stop_signal:
 				break
-
-		# print("Total R:", R)
-		# print("Total R_neg:", R_neg)
 
 	def run(self):
 		# while not self.stop_signal:
@@ -358,6 +367,7 @@ class Optimizer(threading.Thread):
 _env = Environment(render=False, eps_start=0., eps_end=0.)
 OBSERVATION_SPACE = _env.env.observation_space
 ACTION_SPACE = _env.env.action_space
+NULL_STATE = _env.env.get_null_state()
 # STATE = env_test.env.observation_space.shape # 2D array shape with 0 or 1
 # # print "State: %d, %d" % (STATE[0], STATE[1])
 # ACTION = env_test.env.action_space # a tuple with non-zero inputs

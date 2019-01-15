@@ -11,8 +11,8 @@ from gym import error, spaces, utils
 from gym.utils import seeding
 import numpy as np
 
-NEG_INF = -10.0
-POS_INF = 10.0
+NEG_INF = -100.0
+POS_INF = 100.0
 
 class SkynetEnv(gym.Env):
 
@@ -87,6 +87,12 @@ class SkynetEnv(gym.Env):
             routes[flow_id-1][src_switch_id-1] = 1
             reachability[flow_id-1][src_switch_id-1] = 1
             reachability[flow_id-1][dst_switch_id-1] = 1
+    
+    def get_null_state(self):
+        topology = self.state["topology"]
+        routes = self.state["routes"]
+        reachability = self.state["reachability"]
+        return dict(topology=np.array(topology), routes=np.zeros(routes.shape), reachability=np.zeros(reachability.shape))
     
     # random endpoints for flows in the network
     def _init_flow_details(self, initialize=True):
@@ -360,7 +366,7 @@ class SkynetEnv(gym.Env):
         if len(self.completed_flows) == self.num_flows or self.is_game_over:
             done = True
         
-        return [np.array(topology), np.array(routes), np.array(reachability)], reward, done, {}
+        return dict(topology=np.array(topology), routes=np.array(routes), reachability=np.array(reachability)), reward, done, {}
 
     # def step(self, action):
     #     # assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
@@ -419,7 +425,7 @@ class SkynetEnv(gym.Env):
         topology = self.state["topology"]
         routes = self.state["routes"]
         reachability = self.state["reachability"]
-        return [np.array(topology), np.array(routes), np.array(reachability)]
+        return dict(topology=np.array(topology), routes=np.array(routes), reachability=np.array(reachability))
 
     def seed(self, seed=None):
         random.seed(seed)
