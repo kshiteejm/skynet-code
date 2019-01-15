@@ -360,7 +360,7 @@ class SkynetEnv(gym.Env):
         if len(self.completed_flows) == self.num_flows or self.is_game_over:
             done = True
         
-        return dict(topology=np.array(topology), routes=np.array(routes), reachability=np.array(reachability)), reward, done, {}
+        return [np.array(topology), np.array(routes), np.array(reachability)], reward, done, {}
 
     # def step(self, action):
     #     # assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
@@ -419,7 +419,7 @@ class SkynetEnv(gym.Env):
         topology = self.state["topology"]
         routes = self.state["routes"]
         reachability = self.state["reachability"]
-        return dict(topology=np.array(topology), routes=np.array(routes), reachability=np.array(reachability))
+        return [np.array(topology), np.array(routes), np.array(reachability)]
 
     def seed(self, seed=None):
         random.seed(seed)

@@ -99,12 +99,12 @@ class Brain:
 
 		topo_t = tf.placeholder(tf.float32, shape=(None, self.topology_shape[0], self.topology_shape[1]))
 		routes_t = tf.placeholder(tf.float32, shape=(None, self.routes_shape[0], self.routes_shape[1]))
-		reachability_t = tf.placeholder(tf.float32, shape=(None, self.reachability_shape[0], self.reachability_shape[1]))
+		reach_t = tf.placeholder(tf.float32, shape=(None, self.reachability_shape[0], self.reachability_shape[1]))
 
 		action_t = tf.placeholder(tf.float32, shape=(None, self.action_shape_height, self.action_shape_width))
 		reward_t = tf.placeholder(tf.float32, shape=(None, 1))
 
-		prob, avg_value = model([topo_t, routes_t, reachability_t])
+		prob, avg_value = model([topo_t, routes_t, reach_t])
 
 		log_prob = tf.log(tf.reduce_sum(prob * action_t, axis=1, keep_dims=True) + 1e-10)
 		advantage = reward_t - avg_value
@@ -118,7 +118,7 @@ class Brain:
 		optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
 		minimize = optimizer.minimize(loss_total)
 
-		return [topo_t, routes_t, reachability_t], action_t, reward_t, minimize
+		return topo_t, routes_t, reach_t, action_t, reward_t, minimize
 
 	def optimize(self):
 		if len(self.train_queue[0]) < MIN_BATCH:
@@ -129,14 +129,15 @@ class Brain:
 			if len(self.train_queue[0]) < MIN_BATCH:	# more thread could have passed without lock
 				return 									# we can't yield inside lock
 
-			s, a, r, s_, s_mask = self.train_queue
+			state, action, reward, state_, state_mask = self.train_queue
+			# s, a, r, s_, s_mask = self.train_queue
 			self.train_queue = [ [], [], [], [], [] ]
 
-		s = np.vstack(s)
-		a = np.vstack(a)
-		r = np.vstack(r)
-		s_ = np.vstack(s_)
-		s_mask = np.vstack(s_mask)
+		state = np.vstack(state)
+		action = np.vstack(action)
+		reward = np.vstack(reward)
+		state_ = np.vstack(state_)
+		state_mask = np.vstack(state_mask)
 		# print s.shape
 		# print a.shape
 		# print a
@@ -190,8 +191,6 @@ class Agent:
 
 		self.memory = []	# used for n_step return
 		self.R = 0.
-		self.R_rand = 0.
-		self.R_ = 0.
 		self.num_steps = 0
 
 	def getEpsilon(self):
@@ -205,7 +204,6 @@ class Agent:
 		global frames; frames = frames + 1
 
 		if random.random() < eps:
-			self.R_rand = self.R_rand + 1
 			# action = (random.randint(1, ACTION.high[0]), random.randint(1, ACTION.high[1]))
 			# while (s[action[0]-1][action[1]-1] != 0):
 			# 	action = (random.randint(1, ACTION.high[0]), random.randint(1, ACTION.high[1]))
@@ -242,12 +240,7 @@ class Agent:
 		# self.memory.append( (s, a, r, s_) )
 
 		self.R = ( self.R + r * GAMMA_N ) / GAMMA
-		self.R_ = self.R_ + r
 		self.num_steps = self.num_steps + 1
-		if self.num_steps >= 300:
-			# print self.R_
-			self.R_ = 0.
-			self.num_steps = 0
 
 		if s_ is None:
 			while len(self.memory) > 0:
