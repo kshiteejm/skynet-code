@@ -290,7 +290,6 @@ class Environment(threading.Thread):
 
 	def __init__(self, render=False, eps_start=EPS_START, eps_end=EPS_STOP, eps_steps=EPS_STEPS):
 		threading.Thread.__init__(self)
-
 		self.reset()
 
 		# self.stop_signal = False
@@ -303,7 +302,7 @@ class Environment(threading.Thread):
 		self.stop_signal = False
 		self.render = render
 		self.env = gym.make(ENV)
-		self.env.__init__(topo_size=4, num_flows=100)
+		self.env.__init__(topo_size=4, num_flows=100, topo_style='fat_tree')
 		self.agent = Agent(eps_start, eps_end, eps_steps, self.env)
 		self.time_begin = time.time()
 
@@ -322,12 +321,12 @@ class Environment(threading.Thread):
 			if done: # terminal state
 				# print state_
 				state_ = None
-				if reward > 0:
-					if not self.env.is_game_over:
-						self.stop_signal = True
-					time_now = time.time()
-					print "EXECUTION TIME: %d" % (time_now - self.time_begin)
-					break
+				# if reward > 0:
+				if not self.env.is_game_over:
+					self.stop_signal = True
+				time_now = time.time()
+				print "TIME: %d, DEVIATION: %f" % ((time_now - self.time_begin), self.env.get_path_length_quality())
+				break
 
 			self.agent.train(state, action, reward, state_)
 

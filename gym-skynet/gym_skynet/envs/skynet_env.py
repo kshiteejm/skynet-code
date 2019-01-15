@@ -16,31 +16,43 @@ POS_INF = 100.0
 
 class SkynetEnv(gym.Env):
 
-    def __init__(self, topo_size=2, num_flows=1):
+    def __init__(self, topo_size=2, num_flows=1, topo_style='fat_tree'):
         self.__version__ = "0.1.0"
        
-        # static state
-        # topology state
+        self.is_game_over = False
         self.topo_scale_factor = topo_size
-        self.num_edge_switches = topo_size*topo_size
-        self.num_agg_switches = topo_size
-        self.num_core_switches = topo_size/2
-        self.num_switches = self.num_edge_switches + self.num_agg_switches + self.num_core_switches
-        self.num_links = self.num_edge_switches + self.num_agg_switches*self.num_core_switches
+
+        # topology state
+        if topo_style == 'std_dcn':
+            self.num_edge_switches = self.topo_scale_factor*self.topo_scale_factor
+            self.num_agg_switches = self.topo_scale_factor
+            self.num_core_switches = self.topo_scale_factor/2
+            self.num_switches = self.num_edge_switches + self.num_agg_switches + self.num_core_switches
+            self.num_links = self.num_edge_switches + self.num_agg_switches*self.num_core_switches
+
+        if topo_style == 'fat_tree':
+            self.topo_scale_factor = topo_size
+            self.num_edge_switches = self.topo_scale_factor*self.topo_scale_factor/2
+            self.num_agg_switches = self.topo_scale_factor*self.topo_scale_factor/2
+            self.num_core_switches = (self.topo_scale_factor/2)*(self.topo_scale_factor/2)
+            self.num_switches = self.num_edge_switches + self.num_agg_switches + self.num_core_switches
+            self.num_links = 2*self.num_agg_switches*self.topo_scale_factor/2 + self.num_edge_switches*self.topo_scale_factor/2
+
         self.switch_switch_map = {}
-        self.link_switch_map = {}
-        self.switch_link_map = {}
-        self._init_switch_switch_map()
-        self._init_link_switch_map()
-        self._init_switch_link_map()
+        # self.link_switch_map = {}
+        # self.switch_link_map = {}
+        self._init_switch_switch_map(topo_style)
+        # self._init_link_switch_map(topo_style)
+        # self._init_switch_link_map(topo_style)
+
         # flow traffic state
         self.num_flows = num_flows
         self.flow_details = {}
         self.flow_switch_map = {}
         self.completed_flows = []
         self.incomplete_flows = []
-        self.is_game_over = False
         self._init_flow_details()
+        
 
         # observation space:
         self.observation_space = spaces.Dict(dict(
@@ -113,48 +125,75 @@ class SkynetEnv(gym.Env):
         # print "flow details: %s" % str(self.flow_details)
 
     # initialization of map from switch to switch neighbors
-    def _init_switch_switch_map(self):
+    def _init_switch_switch_map(self, topo_style='fat_tree'):
         for switch_id in range(1, self.num_switches + 1):
             self.switch_switch_map[switch_id] = []
-        switch_id = 1
-        # for edge - agg switches
-        while switch_id <= self.num_edge_switches:
-            # agg switch neighbor
-            neighbor_id = (switch_id - 1)/self.topo_scale_factor + 1 + self.num_edge_switches
-            self.switch_switch_map[switch_id].append(neighbor_id)
-            self.switch_switch_map[neighbor_id].append(switch_id)
-            switch_id = switch_id + 1
-        # for agg - core switches
-        while switch_id <= self.num_edge_switches+self.num_agg_switches:
-            # core switch neighbors
-            for neighbor_id in range(self.num_edge_switches+self.num_agg_switches+1, self.num_switches+1):
+
+        if topo_style == 'std_dcn':
+            switch_id = 1
+            # for edge - agg switches
+            while switch_id <= self.num_edge_switches:
+                # agg switch neighbor
+                neighbor_id = (switch_id - 1)/self.topo_scale_factor + 1 + self.num_edge_switches
                 self.switch_switch_map[switch_id].append(neighbor_id)
                 self.switch_switch_map[neighbor_id].append(switch_id)
-            switch_id = switch_id + 1
+                switch_id = switch_id + 1
+            # for agg - core switches
+            while switch_id <= self.num_edge_switches+self.num_agg_switches:
+                # core switch neighbors
+                for neighbor_id in range(self.num_edge_switches+self.num_agg_switches+1, self.num_switches+1):
+                    self.switch_switch_map[switch_id].append(neighbor_id)
+                    self.switch_switch_map[neighbor_id].append(switch_id)
+                switch_id = switch_id + 1
+        
+        if topo_style == 'fat_tree':
+            # print "total edge switches: %d" % self.num_edge_switches
+            # print "scale factor: %d" % self.topo_scale_factor
+            switch_id = 1
+            # for edge - agg switches
+            while switch_id <= self.num_edge_switches:
+                edge_switches = range(switch_id, switch_id+self.topo_scale_factor/2)
+                agg_switches = range(switch_id+self.num_edge_switches, switch_id+self.num_edge_switches+self.topo_scale_factor/2)
+                for edge_switch_id in edge_switches:
+                    for agg_switch_id in agg_switches:
+                        # print "edge_switch_id: %d, agg_switch_id: %d" % (edge_switch_id, agg_switch_id)
+                        self.switch_switch_map[edge_switch_id].append(agg_switch_id)
+                        self.switch_switch_map[agg_switch_id].append(edge_switch_id)
+                switch_id = switch_id + self.topo_scale_factor/2
+            # for agg - core switches
+            core_switches = range(self.num_edge_switches+self.num_agg_switches+1, self.num_switches+1)
+            while switch_id <= self.num_edge_switches+self.num_agg_switches:
+                for core_switch_id in core_switches:
+                    agg_switch_id = switch_id + (core_switch_id - core_switches[0])/(self.topo_scale_factor/2)
+                    # print "agg_switch_id: %d, core_switch_id: %d" % (agg_switch_id, core_switch_id)
+                    self.switch_switch_map[agg_switch_id].append(core_switch_id)
+                    self.switch_switch_map[core_switch_id].append(agg_switch_id)
+                switch_id = switch_id + self.topo_scale_factor/2
+
         # print "switch switch map: %s" % str(self.switch_switch_map)
 
-    # initialization of map from link to switches attached to that link
-    def _init_link_switch_map(self):
-        link_id = 1
-        # for edge - agg links
-        while link_id <= self.num_edge_switches:
-            self.link_switch_map[link_id] = [link_id, self.num_edge_switches + (link_id - 1)/self.topo_scale_factor + 1]
-            link_id = link_id + 1
-        # for agg - core links
-        base_link_id = link_id
-        while link_id <= self.num_links:
-            self.link_switch_map[link_id] = [base_link_id + (link_id-base_link_id)/self.num_core_switches, 
-                    base_link_id + self.num_agg_switches + (link_id-base_link_id)%self.num_core_switches]
-            link_id = link_id + 1
-        # print "link switch map: %s" % str(self.link_switch_map)
+    # # initialization of map from link to switches attached to that link
+    # def _init_link_switch_map(self, topo_style='std_dcn'):
+    #     link_id = 1
+    #     # for edge - agg links
+    #     while link_id <= self.num_edge_switches:
+    #         self.link_switch_map[link_id] = [link_id, self.num_edge_switches + (link_id - 1)/self.topo_scale_factor + 1]
+    #         link_id = link_id + 1
+    #     # for agg - core links
+    #     base_link_id = link_id
+    #     while link_id <= self.num_links:
+    #         self.link_switch_map[link_id] = [base_link_id + (link_id-base_link_id)/self.num_core_switches, 
+    #                 base_link_id + self.num_agg_switches + (link_id-base_link_id)%self.num_core_switches]
+    #         link_id = link_id + 1
+    #     # print "link switch map: %s" % str(self.link_switch_map)
 
-    # initialization of map from switch to links attached to that switch
-    def _init_switch_link_map(self):
-        for switch_id in range(1, self.num_switches + 1):
-            self.switch_link_map[switch_id] = []
-        for link_id in range(1, self.num_links + 1):
-            for switch_id in self.link_switch_map[link_id]:
-                self.switch_link_map[switch_id].append(link_id)
+    # # initialization of map from switch to links attached to that switch
+    # def _init_switch_link_map(self, topo_style='std_dcn'):
+    #     for switch_id in range(1, self.num_switches + 1):
+    #         self.switch_link_map[switch_id] = []
+    #     for link_id in range(1, self.num_links + 1):
+    #         for switch_id in self.link_switch_map[link_id]:
+    #             self.switch_link_map[switch_id].append(link_id)
 
     def _get_neighbors(self, flow_id, root_switch_id, visited=True):
         routes = self.state["routes"]
@@ -320,6 +359,27 @@ class SkynetEnv(gym.Env):
     #     random_link_id = np.random.choice(range(1, self.num_links + 1), p=link_p)
     #     return (random_flow_id, random_link_id)
 
+    def get_avg_flow_path_length(self):
+        sum_flow_path_len = 0.0
+        for flow_id in self.flow_switch_map:
+            sum_flow_path_len = sum_flow_path_len + len(self.flow_switch_map[flow_id])
+        return (sum_flow_path_len*1.0)/(self.num_flows*1.0)
+
+    def get_path_length_quality(self):
+        quality = 0.0
+        for flow_id in self.flow_details:
+            src_switch_id, dst_switch_id = self.flow_details[flow_id]
+            src_pod_id = (src_switch_id - 1)/(self.topo_scale_factor/2)
+            dst_pod_id = (dst_switch_id - 1)/(self.topo_scale_factor/2)
+            shortest_path_len = 2
+            if src_pod_id == dst_pod_id:
+                shortest_path_len = 2
+            else:
+                shortest_path_len = 4
+            flow_path_len = len(self.flow_switch_map[flow_id])
+            quality = quality + flow_path_len - shortest_path_len
+        return quality
+
     def step(self, action):
         topology = self.state["topology"]
         routes = self.state["routes"]
@@ -336,12 +396,14 @@ class SkynetEnv(gym.Env):
         # get rewards and check game over conditions
         # check if the flow reaches desired destination
         if nxt_switch_id == dst_switch_id:
-            reward = POS_INF
+            # reward = POS_INF
             self.incomplete_flows.remove(flow_id)
             self.completed_flows.append(flow_id)
         else:
-            # check if the flow reaches wrong edge switch or there is a cycle
-            if self._is_edge_switch(nxt_switch_id) or nxt_switch_id in self.flow_switch_map[flow_id]:
+            # # check if the flow reaches wrong edge switch or there is a cycle
+            # if self._is_edge_switch(nxt_switch_id) or nxt_switch_id in self.flow_switch_map[flow_id]:
+            # check if next switch causes a cycle
+            if nxt_switch_id in self.flow_switch_map[flow_id]:
                 reward = NEG_INF
                 self.incomplete_flows.remove(flow_id)
                 self.completed_flows.append(flow_id)
