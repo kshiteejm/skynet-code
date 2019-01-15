@@ -19,16 +19,11 @@ OPTIMIZERS = 2
 THREAD_DELAY = 0.001
 
 GAMMA = 0.99
-# GAMMA = 0.1
-# GAMMA = 0.7
-
 N_STEP_RETURN = 5
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
 EPS_START = 0.4
 EPS_STOP  = 0.0
-# EPS_START = 0.
-# EPS_STOP  = 0.
 EPS_STEPS = 12000
 
 MIN_BATCH = 32
@@ -49,51 +44,81 @@ class Brain:
 		K.set_session(self.session)
 		K.manual_variable_initialization(True) # what happens here?
 
-		self.model = self._build_model_1()
-		self.graph = self._build_graph_1(self.model)
+		self.topology_shape = OBSERVATION_SPACE.spaces["topology"].shape
+		self.routes_shape = OBSERVATION_SPACE.spaces["routes"].shape
+		self.reachability_shape = OBSERVATION_SPACE.spaces["reachability"].shape
+		self.action_shape_height = int(ACTION_SPACE.high[0])
+		self.action_shape_width = int(ACTION_SPACE.high[1])
+
+		self.model = self._build_model()
+		self.graph = self._build_graph(self.model)
 
 		self.session.run(tf.global_variables_initializer())
 		self.default_graph = tf.get_default_graph()
 
 		self.default_graph.finalize()	# avoid modifications
 
-	def _build_model_1(self):
+	def _build_model(self):
+		topology_input = Input(shape=self.topology_shape)
+		routes_input = Input(shape=self.routes_shape)
+		reachability_input = Input(shape=self.reachability_shape)
 
-		# input layer dimensions: number of flows * number of links
-		l_input = Input(batch_shape=(None, int(STATE[0])*int(STATE[1])))
-		l_dense_1 = Dense(32, activation='relu')(l_input)
-		l_dense_2 = Dense(16, activation='relu')(l_dense_1)
+		merged_input = Concatenate(axis=1)([topology_input, routes_input, reachability_input])
+		flattened_input = Flatten()(merged_input)
+		dense_layer_1 = Dense(256, activation='relu')(flattened_input)
+		dense_layer_2 = Dense(32, activation='relu')(dense_layer_1)
 
-		# output layer dimensions: number of flows * number of links
-		out_actions = Dense(int(ACTION.high[0])*int(ACTION.high[1]), activation='softmax')(l_dense_2)
-		out_value   = Dense(1, activation='linear')(l_dense_2)
+		_out_actions = Dense(self.action_shape_height*self.action_shape_width, activation='softmax')(dense_layer_2)
+		out_actions = Reshape((self.action_shape_height, self.action_shape_width))(_out_actions)
+		out_value = Dense(1, activation='linear')(dense_layer_2)
 
-		model = Model(inputs=[l_input], outputs=[out_actions, out_value])
-		model._make_predict_function()	# have to initialize before threading
-		# print model.summary()
+		model = Model(inputs=[topology_input, routes_input, reachability_input], outputs=[out_actions, out_value])
+
+		# # input layer dimensions: number of flows * number of links
+		# l_input = Input(batch_shape=(None, int(STATE[0])*int(STATE[1])))
+		# l_dense_1 = Dense(32, activation='relu')(l_input)
+		# l_dense_2 = Dense(16, activation='relu')(l_dense_1)
+
+		# # output layer dimensions: number of flows * number of links
+		# out_actions = Dense(int(ACTION.high[0])*int(ACTION.high[1]), activation='softmax')(l_dense_2)
+		# out_value   = Dense(1, activation='linear')(l_dense_2)
+
+		# model = Model(inputs=[l_input], outputs=[out_actions, out_value])
+		# model._make_predict_function()	# have to initialize before threading
+		
+		print model.summary()
 
 		return model
 
-	def _build_graph_1(self, model):
-		s_t = tf.placeholder(tf.float32, shape=(None, int(STATE[0])*int(STATE[1])))
-		a_t = tf.placeholder(tf.float32, shape=(None, int(ACTION.high[0])*int(ACTION.high[1])))
-		r_t = tf.placeholder(tf.float32, shape=(None, 1)) # not immediate, but discounted n step reward
+	def _build_graph(self, model):
+		# s_t = tf.placeholder(tf.float32, shape=(None, int(STATE[0])*int(STATE[1])))
+		# a_t = tf.placeholder(tf.float32, shape=(None, int(ACTION.high[0])*int(ACTION.high[1])))
+		# r_t = tf.placeholder(tf.float32, shape=(None, 1)) # not immediate, but discounted n step reward
 		
-		p, v = model(s_t)
+		# prob, avg_value = model(s_t)
 
-		log_prob = tf.log(tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10)
-		advantage = r_t - v
+		topo_t = tf.placeholder(tf.float32, shape=(None, self.topology_shape[0], self.topology_shape[1]))
+		routes_t = tf.placeholder(tf.float32, shape=(None, self.routes_shape[0], self.routes_shape[1]))
+		reachability_t = tf.placeholder(tf.float32, shape=(None, self.reachability_shape[0], self.reachability_shape[1]))
+
+		action_t = tf.placeholder(tf.float32, shape=(None, self.action_shape_height, self.action_shape_width))
+		reward_t = tf.placeholder(tf.float32, shape=(None, 1))
+
+		prob, avg_value = model([topo_t, routes_t, reachability_t])
+
+		log_prob = tf.log(tf.reduce_sum(prob * action_t, axis=1, keep_dims=True) + 1e-10)
+		advantage = reward_t - avg_value
 
 		loss_policy = - log_prob * tf.stop_gradient(advantage)									# maximize policy
 		loss_value  = LOSS_V * tf.square(advantage)												# minimize value error
-		entropy = LOSS_ENTROPY * tf.reduce_sum(p * tf.log(p + 1e-10), axis=1, keep_dims=True)	# maximize entropy (regularization)
+		entropy = LOSS_ENTROPY * tf.reduce_sum(prob * tf.log(prob + 1e-10), axis=1, keep_dims=True)	# maximize entropy (regularization)
 
 		loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
 
 		optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
 		minimize = optimizer.minimize(loss_total)
 
-		return s_t, a_t, r_t, minimize
+		return [topo_t, routes_t, reachability_t], action_t, reward_t, minimize
 
 	def optimize(self):
 		if len(self.train_queue[0]) < MIN_BATCH:
@@ -170,7 +195,7 @@ class Agent:
 		self.num_steps = 0
 
 	def getEpsilon(self):
-		if(frames >= self.eps_steps):
+		if frames >= self.eps_steps:
 			return self.eps_end
 		else:
 			return self.eps_start + frames * (self.eps_end - self.eps_start) / self.eps_steps	# linearly interpolate
@@ -337,12 +362,14 @@ class Optimizer(threading.Thread):
 		self.stop_signal = True
 
 #-- main
-env_test = Environment(render=False, eps_start=0., eps_end=0.)
-STATE = env_test.env.observation_space.shape # 2D array shape with 0 or 1
-# print "State: %d, %d" % (STATE[0], STATE[1])
-ACTION = env_test.env.action_space # a tuple with non-zero inputs
-# print "Action: %d, %d" % (ACTION.high[0], ACTION.high[1])
-NO_STATE = np.zeros(STATE)
+_env = Environment(render=False, eps_start=0., eps_end=0.)
+OBSERVATION_SPACE = _env.env.observation_space
+ACTION_SPACE = _env.env.action_space
+# STATE = env_test.env.observation_space.shape # 2D array shape with 0 or 1
+# # print "State: %d, %d" % (STATE[0], STATE[1])
+# ACTION = env_test.env.action_space # a tuple with non-zero inputs
+# # print "Action: %d, %d" % (ACTION.high[0], ACTION.high[1])
+# NO_STATE = np.zeros(STATE)
 
 brain = Brain()	# brain is global in A3C
 
@@ -357,35 +384,35 @@ time_begin = time.time()
 for e in envs:
 	e.start()
 
-time.sleep(RUN_TIME)
+# time.sleep(RUN_TIME)
 
-for e in envs:
-	e.stop()
-for e in envs:
-	e.join()
+# for e in envs:
+# 	e.stop()
+# for e in envs:
+# 	e.join()
 
-print "SECOND INSTANCE"
+# print "SECOND INSTANCE"
 
-envs = [Environment() for i in range(THREADS)]
+# envs = [Environment() for i in range(THREADS)]
 
-time_begin = time.time()
+# time_begin = time.time()
 
-for e in envs:
-	e.start()
+# for e in envs:
+# 	e.start()
 
-time.sleep(RUN_TIME)
+# time.sleep(RUN_TIME)
 
-for e in envs:
-	e.stop()
-for e in envs:
-	e.join()
+# for e in envs:
+# 	e.stop()
+# for e in envs:
+# 	e.join()
 
-for o in opts:
-	o.stop()
-for o in opts:
-	o.join()
+# for o in opts:
+# 	o.stop()
+# for o in opts:
+# 	o.join()
 
-print("Training finished")
+# print("Training finished")
 
 # env_test.start()
 # time.sleep(30)

@@ -41,16 +41,53 @@ class SkynetEnv(gym.Env):
         self.incomplete_flows = []
         self.is_game_over = False
         self._init_flow_details()
-        
-        # observation space: #flows * #network links
-        self.observation_space = spaces.Box(low=0, high=1, shape=(self.num_flows, self.num_links), dtype=np.uint8) 
-        # action space: flow-id, network-link-id
-        self.action_space = spaces.Box(low=np.array([1, 1]), high=np.array([self.num_flows, self.num_links]), dtype=np.uint8)
 
-        # internal state for registering the network links that flows traverse so far
-        self.state = np.zeros((self.num_flows, self.num_links), dtype=np.uint8)
+        # observation space:
+        self.observation_space = spaces.Dict(dict(
+            topology=spaces.Box(low=0, high=1, shape=(self.num_switches, self.num_switches), dtype=np.uint8),
+            routes=spaces.Box(low=0, high=1, shape=(self.num_flows, self.num_switches), dtype=np.uint8),
+            reachability=spaces.Box(low=0, high=1, shape=(self.num_flows, self.num_switches), dtype=np.uint8)
+        ))
+
+        # action space:
+        self.action_space = spaces.Box(low=np.array([1, 1]), high=np.array([self.num_flows, self.num_switches]), dtype=np.uint8)
+
+        # state:
+        self.state = dict(
+            topology=np.zeros((self.num_switches, self.num_switches), dtype=np.uint8),
+            routes=np.zeros((self.num_flows, self.num_switches), dtype=np.uint8),
+            reachability=np.zeros((self.num_flows, self.num_switches), dtype=np.uint8)
+        )
+
+        self._init_state()
+
+        # # observation space: #flows * #network links
+        # self.observation_space = spaces.Box(low=0, high=1, shape=(self.num_flows, self.num_links), dtype=np.uint8) 
+
+        # # action space: flow-id, network-link-id
+        # self.action_space = spaces.Box(low=np.array([1, 1]), high=np.array([self.num_flows, self.num_links]), dtype=np.uint8)
+
+        # # internal state for registering the network links that flows traverse so far
+        # self.state = np.zeros((self.num_flows, self.num_links), dtype=np.uint8)
+
         self.viewer = None
 
+    def _init_state(self):
+        topology = self.state["topology"]
+        routes = self.state["routes"]
+        reachability = self.state["reachability"]
+
+        # initialize topology
+        for src_switch_id in self.switch_switch_map:
+            for dst_switch_id in self.switch_switch_map[src_switch_id]:
+                topology[src_switch_id-1][dst_switch_id-1] = 1
+        # initialize routes, reachability
+        for flow_id in self.flow_details:
+            src_switch_id, dst_switch_id = self.flow_details[flow_id]
+            routes[flow_id-1][src_switch_id-1] = 1
+            reachability[flow_id-1][src_switch_id-1] = 1
+            reachability[flow_id-1][dst_switch_id-1] = 1
+    
     # random endpoints for flows in the network
     def _init_flow_details(self, initialize=True):
         self.completed_flows = []
@@ -114,24 +151,39 @@ class SkynetEnv(gym.Env):
                 self.switch_link_map[switch_id].append(link_id)
 
     def _get_neighbors(self, flow_id, root_switch_id, visited=True):
-        switch_links = self.switch_link_map[root_switch_id]
-        if visited:
-            active_links = [link_id for link_id in switch_links if self.state[flow_id-1][link_id-1] == 1]
-        else:
-            active_links = [link_id for link_id in switch_links if self.state[flow_id-1][link_id-1] == 0]
+        routes = self.state["routes"]
+        next_switches = self.switch_switch_map[root_switch_id]
         neighbors = set()
-        for link_id in active_links:
-            link_switches = self.link_switch_map[link_id]
-            for switch_id in link_switches:
-                if visited:
-                    if switch_id in self.flow_switch_map[flow_id]:
-                        neighbors.add(switch_id)
-                else:
-                    if switch_id not in self.flow_switch_map[flow_id]:
-                        neighbors.add(switch_id)
+        for switch_id in next_switches:
+            if visited:
+                if routes[flow_id-1][switch_id-1] == 1:
+                    neighbors.add(switch_id)
+            else:
+                if routes[flow_id-1][switch_id-1] == 0:
+                    neighbors.add(switch_id)
         if root_switch_id in neighbors:
             neighbors.remove(root_switch_id)
         return neighbors
+
+    # def _get_neighbors(self, flow_id, root_switch_id, visited=True):
+    #     switch_links = self.switch_link_map[root_switch_id]
+    #     if visited:
+    #         active_links = [link_id for link_id in switch_links if self.state[flow_id-1][link_id-1] == 1]
+    #     else:
+    #         active_links = [link_id for link_id in switch_links if self.state[flow_id-1][link_id-1] == 0]
+    #     neighbors = set()
+    #     for link_id in active_links:
+    #         link_switches = self.link_switch_map[link_id]
+    #         for switch_id in link_switches:
+    #             if visited:
+    #                 if switch_id in self.flow_switch_map[flow_id]:
+    #                     neighbors.add(switch_id)
+    #             else:
+    #                 if switch_id not in self.flow_switch_map[flow_id]:
+    #                     neighbors.add(switch_id)
+    #     if root_switch_id in neighbors:
+    #         neighbors.remove(root_switch_id)
+    #     return neighbors
             
     def _connected_components(self, flow_id, visited=True):
         connected_components = []
@@ -181,30 +233,29 @@ class SkynetEnv(gym.Env):
 
     # get a next hop link for an incomplete flow adhering to a particular probability distribution
     def get_random_action(self, p=None):
-        masked_p = np.zeros((self.num_flows, self.num_links))
+        routes = self.state["routes"]
+        masked_p = np.zeros((self.num_flows, self.num_switches))
         for flow_id in self.incomplete_flows:
-            recent_flow_switch_id = self.flow_switch_map[flow_id][-1]
-            all_next_link_ids = self.switch_link_map[recent_flow_switch_id]
-            filtered_next_link_ids = [link_id for link_id in all_next_link_ids if self.state[flow_id - 1][link_id - 1] == 0]
+            recent_switch_id = self.flow_switch_map[flow_id][-1]
+            next_switch_ids = self.switch_switch_map[recent_switch_id]
+            filtered_next_switch_ids = [switch_id for switch_id in next_switch_ids if routes[flow_id - 1][switch_id - 1] == 0]
             src_switch_id, dst_switch_id = self.flow_details[flow_id]
             connected_components, is_cyclic = self._connected_components(flow_id, visited=False)
-            reachable_to_dst_next_link_ids = []
+            reachable_to_dst_next_switch_ids = []
             for group in connected_components:
                 if dst_switch_id in group:
-                    for link_id in filtered_next_link_ids:
-                        link_src_switch_id, link_dst_switch_id = self.link_switch_map[link_id]
-                        other_switch_id = link_src_switch_id if link_dst_switch_id == recent_flow_switch_id else link_dst_switch_id
-                        if other_switch_id in group:
-                            reachable_to_dst_next_link_ids.append(link_id)
+                    for switch_id in filtered_next_switch_ids:
+                        if switch_id in group:
+                            reachable_to_dst_next_switch_ids.append(switch_id)
             # all_next_switch_ids = self.switch_switch_map[recent_flow_switch_id]
             # filtered_next_switch_ids = [switch_id for switch_id in all_next_switch_ids if switch_id not in self.flow_switch_map[flow_id]]
-            for link_id in reachable_to_dst_next_link_ids:
+            for switch_id in reachable_to_dst_next_switch_ids:
                 if p is None:
-                    masked_p[flow_id - 1][link_id - 1] = 1.0/float(len(reachable_to_dst_next_link_ids))
+                    masked_p[flow_id - 1][switch_id - 1] = 1.0/float(len(reachable_to_dst_next_switch_ids))
                 else:
-                    masked_p[flow_id - 1][link_id - 1] = p[flow_id - 1][link_id - 1] + 1e-7
-            if len(reachable_to_dst_next_link_ids) == 0:
-                print "Flow %d from %d to %d has no next hop from %d" % (flow_id, src_switch_id, dst_switch_id, recent_flow_switch_id)
+                    masked_p[flow_id - 1][switch_id - 1] = p[flow_id - 1][switch_id - 1] + 1e-7
+            if len(reachable_to_dst_next_switch_ids) == 0:
+                print "Flow %d from %d to %d has no next hop from %d" % (flow_id, src_switch_id, dst_switch_id, recent_switch_id)
         flow_p = np.sum(masked_p, axis=1)
         flow_p_sum = np.sum(flow_p)
         if flow_p_sum == 0:
@@ -212,24 +263,67 @@ class SkynetEnv(gym.Env):
             return (-1 , -1)
         flow_p = [p/flow_p_sum for p in flow_p]
         random_flow_id = np.random.choice(range(1, self.num_flows + 1), p=flow_p)
-        link_p = masked_p[random_flow_id - 1]
-        link_p_sum = np.sum(link_p)
-        if link_p_sum == 0:
+        switch_p = masked_p[random_flow_id - 1]
+        switch_p_sum = np.sum(switch_p)
+        if switch_p_sum == 0:
             print "Flow Not Viable Exception"
             return (random_flow_id, -1)
-        link_p = [p/link_p_sum for p in link_p]
-        random_link_id = np.random.choice(range(1, self.num_links + 1), p=link_p)
-        return (random_flow_id, random_link_id)
+        switch_p = [p/switch_p_sum for p in switch_p]
+        random_switch_id = np.random.choice(range(1, self.num_switches + 1), p=switch_p)
+        return (random_flow_id, random_switch_id)
+
+    # # get a next hop link for an incomplete flow adhering to a particular probability distribution
+    # def get_random_action(self, p=None):
+    #     masked_p = np.zeros((self.num_flows, self.num_links))
+    #     for flow_id in self.incomplete_flows:
+    #         recent_flow_switch_id = self.flow_switch_map[flow_id][-1]
+    #         all_next_link_ids = self.switch_link_map[recent_flow_switch_id]
+    #         filtered_next_link_ids = [link_id for link_id in all_next_link_ids if self.state[flow_id - 1][link_id - 1] == 0]
+    #         src_switch_id, dst_switch_id = self.flow_details[flow_id]
+    #         connected_components, is_cyclic = self._connected_components(flow_id, visited=False)
+    #         reachable_to_dst_next_link_ids = []
+    #         for group in connected_components:
+    #             if dst_switch_id in group:
+    #                 for link_id in filtered_next_link_ids:
+    #                     link_src_switch_id, link_dst_switch_id = self.link_switch_map[link_id]
+    #                     other_switch_id = link_src_switch_id if link_dst_switch_id == recent_flow_switch_id else link_dst_switch_id
+    #                     if other_switch_id in group:
+    #                         reachable_to_dst_next_link_ids.append(link_id)
+    #         # all_next_switch_ids = self.switch_switch_map[recent_flow_switch_id]
+    #         # filtered_next_switch_ids = [switch_id for switch_id in all_next_switch_ids if switch_id not in self.flow_switch_map[flow_id]]
+    #         for link_id in reachable_to_dst_next_link_ids:
+    #             if p is None:
+    #                 masked_p[flow_id - 1][link_id - 1] = 1.0/float(len(reachable_to_dst_next_link_ids))
+    #             else:
+    #                 masked_p[flow_id - 1][link_id - 1] = p[flow_id - 1][link_id - 1] + 1e-7
+    #         if len(reachable_to_dst_next_link_ids) == 0:
+    #             print "Flow %d from %d to %d has no next hop from %d" % (flow_id, src_switch_id, dst_switch_id, recent_flow_switch_id)
+    #     flow_p = np.sum(masked_p, axis=1)
+    #     flow_p_sum = np.sum(flow_p)
+    #     if flow_p_sum == 0:
+    #         print "No Viable Action Exception"
+    #         return (-1 , -1)
+    #     flow_p = [p/flow_p_sum for p in flow_p]
+    #     random_flow_id = np.random.choice(range(1, self.num_flows + 1), p=flow_p)
+    #     link_p = masked_p[random_flow_id - 1]
+    #     link_p_sum = np.sum(link_p)
+    #     if link_p_sum == 0:
+    #         print "Flow Not Viable Exception"
+    #         return (random_flow_id, -1)
+    #     link_p = [p/link_p_sum for p in link_p]
+    #     random_link_id = np.random.choice(range(1, self.num_links + 1), p=link_p)
+    #     return (random_flow_id, random_link_id)
 
     def step(self, action):
+        topology = self.state["topology"]
+        routes = self.state["routes"]
+        reachability = self.state["reachability"]
         # assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
 
         # get all necessary information before updating network state
-        flow_id, link_id = action
+        flow_id, nxt_switch_id = action
         done = False
-        reward = -0.1
-        link_switches = self.link_switch_map[link_id]
-        nxt_switch_id = link_switches[0] if link_switches[1] == self.flow_switch_map[flow_id][-1] else link_switches[1]
+        reward = -1
         src_switch_id, dst_switch_id = self.flow_details[flow_id]
         connected_components, is_cyclic = self._connected_components(flow_id, visited=False)
 
@@ -261,20 +355,71 @@ class SkynetEnv(gym.Env):
         # update the switches visited by flow - valid if action is one of next hop link
         self.flow_switch_map[flow_id].append(nxt_switch_id)
         # if flow_id in self.completed_flows or state[flow_id-1][link_id-1] == 1: # this should not be happening
-        self.state[flow_id-1][link_id-1] = 1
+        routes[flow_id-1][nxt_switch_id-1] = 1
 
         if len(self.completed_flows) == self.num_flows or self.is_game_over:
             done = True
         
-        return np.array(self.state), reward, done, {}
+        return dict(topology=np.array(topology), routes=np.array(routes), reachability=np.array(reachability)), reward, done, {}
+
+    # def step(self, action):
+    #     # assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
+
+    #     # get all necessary information before updating network state
+    #     flow_id, link_id = action
+    #     done = False
+    #     reward = -0.1
+    #     link_switches = self.link_switch_map[link_id]
+    #     nxt_switch_id = link_switches[0] if link_switches[1] == self.flow_switch_map[flow_id][-1] else link_switches[1]
+    #     src_switch_id, dst_switch_id = self.flow_details[flow_id]
+    #     connected_components, is_cyclic = self._connected_components(flow_id, visited=False)
+
+    #     # get rewards and check game over conditions
+    #     # check if the flow reaches desired destination
+    #     if nxt_switch_id == dst_switch_id:
+    #         reward = POS_INF
+    #         self.incomplete_flows.remove(flow_id)
+    #         self.completed_flows.append(flow_id)
+    #     else:
+    #         # check if the flow reaches wrong edge switch or there is a cycle
+    #         if self._is_edge_switch(nxt_switch_id) or nxt_switch_id in self.flow_switch_map[flow_id]:
+    #             reward = NEG_INF
+    #             self.incomplete_flows.remove(flow_id)
+    #             self.completed_flows.append(flow_id)
+    #             self.is_game_over = True
+    #             print "GAMEself.state = np.zeros((self.num_flows, self.num_links), dtype=np.uint8) OVER"
+    #         # check if the flow cannot reach the destination
+    #         else:
+    #             for group in connected_components:
+    #                 if dst_switch_id in group and nxt_switch_id not in group:
+    #                     reward = NEG_INF
+    #                     self.incomplete_flows.remove(flow_id)
+    #                     self.completed_flows.append(flow_id)
+    #                     self.is_game_over = True
+    #                     print "GAME OVER"
+        
+    #     # update all network state
+    #     # update the switches visited by flow - valid if action is one of next hop link
+    #     self.flow_switch_map[flow_id].append(nxt_switch_id)
+    #     # if flow_id in self.completed_flows or state[flow_id-1][link_id-1] == 1: # this should not be happening
+    #     self.state[flow_id-1][link_id-1] = 1
+
+    #     if len(self.completed_flows) == self.num_flows or self.is_game_over:
+    #         done = True
+        
+    #     return np.array(self.state), reward, done, {}
 
     def render(self, mode='human'):
         return
 
     def reset(self):
-        self.state = np.zeros((self.num_flows, self.num_links), dtype=np.uint8)
         self._init_flow_details(initialize=False)
-        return np.array(self.state)
+        # self.state = np.zeros((self.num_flows, self.num_links), dtype=np.uint8)
+        self._init_state()
+        topology = self.state["topology"]
+        routes = self.state["routes"]
+        reachability = self.state["reachability"]
+        return dict(topology=np.array(topology), routes=np.array(routes), reachability=np.array(reachability))
 
     def seed(self, seed=None):
         random.seed(seed)
