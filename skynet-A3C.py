@@ -147,7 +147,7 @@ class Brain:
 		# print a.shape
 		# print a
 
-		if len(state_topo) > 5*MIN_BATCH: print("Optimizer alert! Minimizing batch of %d" % len(state_topo))
+		if len(state_topo) > 5*MIN_BATCH: print(("Optimizer alert! Minimizing batch of %d" % len(state_topo)))
 
 		avg_reward = self.predict_avg_reward(np.array([state_topo_, state_routes_, state_reach_]))
 		reward = reward + GAMMA_N * avg_reward * state_mask	# set v to 0 where s_ is terminal state
@@ -325,7 +325,7 @@ class Environment(threading.Thread):
 				if not self.env.is_game_over:
 					self.stop_signal = True
 				time_now = time.time()
-				print "TIME: %d, DEVIATION: %f" % ((time_now - self.time_begin), self.env.get_path_length_quality())
+				print("TIME: %d, DEVIATION: %f" % ((time_now - self.time_begin), self.env.get_path_length_quality()))
 				break
 
 			self.agent.train(state, action, reward, state_)
