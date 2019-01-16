@@ -373,9 +373,10 @@ class SkynetEnv(gym.Env):
             dst_pod_id = (dst_switch_id - 1)/(self.topo_scale_factor/2)
             shortest_path_len = 2
             if src_pod_id == dst_pod_id:
-                shortest_path_len = 2
+                shortest_path_len = 3
             else:
-                shortest_path_len = 4
+                shortest_path_len = 5
+            # print "flow-path: %s" % str(self.flow_switch_map[flow_id])
             flow_path_len = len(self.flow_switch_map[flow_id])
             quality = quality + flow_path_len - shortest_path_len
         return quality
