@@ -22,9 +22,9 @@ GAMMA = 0.99
 N_STEP_RETURN = 5
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
-EPS_START = 0.4
-EPS_STOP  = 0.0
-EPS_STEPS = 12000
+EPS_START = 0.5
+EPS_STOP  = 0.1
+EPS_STEPS = 10000
 
 MIN_BATCH = 32
 LEARNING_RATE = 5e-3
@@ -87,7 +87,7 @@ class Brain:
 
 		model._make_predict_function()	# have to initialize before threading
 		
-		# print model.summary()
+		print model.summary()
 
 		return model
 
@@ -122,18 +122,20 @@ class Brain:
 		return topo_t, routes_t, reach_t, action_t, reward_t, minimize
 
 	def optimize(self):
-		if len(self.train_queue[0]) < MIN_BATCH:
+		if len(self.train_queue[0][0]) < MIN_BATCH:
 			time.sleep(0)	# yield
 			return
 
 		with self.lock_queue:
-			if len(self.train_queue[0]) < MIN_BATCH:	# more thread could have passed without lock
+			if len(self.train_queue[0][0]) < MIN_BATCH:	# more thread could have passed without lock
 				return 									# we can't yield inside lock
 
 			state, action, reward, state_, state_mask = self.train_queue
 			# s, a, r, s_, s_mask = self.train_queue
 			self.train_queue = [ [[], [], []], [], [], [[], [], []], [] ]
 
+		# print "before vstack, topo shape: %s, route shape: %s" % (state[0][0].shape, state[1][0].shape)
+		
 		state_topo = np.vstack(state[0])
 		state_routes = np.vstack(state[1])
 		state_reach = np.vstack(state[2])
@@ -143,37 +145,40 @@ class Brain:
 		state_routes_ = np.vstack(state_[1])
 		state_reach_ = np.vstack(state_[2])
 		state_mask = np.vstack(state_mask)
-		# print s.shape
-		# print a.shape
-		# print a
+		
+		# # print "topo: %s, shape: %s" % (str(state_topo), str(state_topo[0].shape))
+		# print "routes: %s, shape: %s" % (str(state_routes), str(state_routes.shape))
+		# print "action: %s, shape: %s" % (str(action), str(action.shape))
+		# # print "reward: %s, shape: %s" % (str(reward), str(reward.shape))
 
 		if len(state_topo) > 5*MIN_BATCH: print(("Optimizer alert! Minimizing batch of %d" % len(state_topo)))
 
-		avg_reward = self.predict_avg_reward(np.array([state_topo_, state_routes_, state_reach_]))
+		avg_reward = self.predict_avg_reward([state_topo_, state_routes_, state_reach_])
 		reward = reward + GAMMA_N * avg_reward * state_mask	# set v to 0 where s_ is terminal state
-		# print r
+		# print "reward value: %s" % str(reward)
 		
 		topo_t, routes_t, reach_t, action_t, reward_t, minimize = self.graph
 		self.session.run(minimize, feed_dict={topo_t: state_topo, routes_t: state_routes, reach_t: state_reach, action_t: action, reward_t: reward})
 
 	def train_push(self, state, action, reward, state_):
 		with self.lock_queue:
-			self.train_queue[0][0].append(state["topology"])
-			self.train_queue[0][1].append(state["routes"])
-			self.train_queue[0][2].append(state["reachability"])
-			self.train_queue[1].append(action)
-			self.train_queue[2].append(reward)
+			# print "routes shape: %s" % str(state["routes"].shape)
+			self.train_queue[0][0].append([state["topology"]])
+			self.train_queue[0][1].append([state["routes"]])
+			self.train_queue[0][2].append([state["reachability"]])
+			self.train_queue[1].append([action])
+			self.train_queue[2].append([reward])
 
 			if state_ is None:
-				self.train_queue[3][0].append(NULL_STATE["topology"])
-				self.train_queue[3][1].append(NULL_STATE["routes"])
-				self.train_queue[3][2].append(NULL_STATE["reachability"])
-				self.train_queue[4].append(0.)
+				self.train_queue[3][0].append([NULL_STATE["topology"]])
+				self.train_queue[3][1].append([NULL_STATE["routes"]])
+				self.train_queue[3][2].append([NULL_STATE["reachability"]])
+				self.train_queue[4].append([0.])
 			else:	
-				self.train_queue[3][0].append(state_["topology"])
-				self.train_queue[3][1].append(state_["routes"])
-				self.train_queue[3][2].append(state_["reachability"])
-				self.train_queue[4].append(1.)
+				self.train_queue[3][0].append([state_["topology"]])
+				self.train_queue[3][1].append([state_["routes"]])
+				self.train_queue[3][2].append([state_["reachability"]])
+				self.train_queue[4].append([1.])
 
 	def predict(self, state):
 		with self.default_graph.as_default():
@@ -302,7 +307,7 @@ class Environment(threading.Thread):
 		self.stop_signal = False
 		self.render = render
 		self.env = gym.make(ENV)
-		self.env.__init__(topo_size=4, num_flows=100, topo_style='fat_tree')
+		self.env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree')
 		self.agent = Agent(eps_start, eps_end, eps_steps, self.env)
 		self.time_begin = time.time()
 
@@ -381,7 +386,7 @@ opts = [Optimizer() for i in range(OPTIMIZERS)]
 for o in opts:
 	o.start()
 
-time_begin = time.time()
+# time_begin = time.time()
 
 for e in envs:
 	e.start()
