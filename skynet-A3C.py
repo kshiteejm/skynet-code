@@ -68,20 +68,29 @@ class Brain:
 
 		self.default_graph.finalize()	# avoid modifications
 
+		self.ops = []
+
 	def _build_model(self):
 		topology_input = Input(shape=self.topology_shape)
 		routes_input = Input(shape=self.routes_shape)
 		reachability_input = Input(shape=self.reachability_shape)
 
 		merged_input = Concatenate(axis=1)([topology_input, routes_input, reachability_input])
+		self.ops.append(merged_input.name)
 		flattened_input = Flatten()(merged_input)
-		self.dense_layer_1 = Dense(256, activation='relu')(flattened_input)
-		dense_layer_2 = Dense(32, activation='relu')(self.dense_layer_1)
+		self.ops.append(flattened_input.name)
+		dense_layer_1 = Dense(256, activation='relu')(flattened_input)
+		self.ops.append(dense_layer_1.name)
+		dense_layer_2 = Dense(32, activation='relu')(dense_layer_1)
+		self.ops.append(dense_layer_2.name)
+
 		# K.print_tensor(dense_layer_1, message='dense layer weights = ')
 
 		_out_actions = Dense(self.action_shape_height*self.action_shape_width, activation='softmax')(dense_layer_2)
 		out_actions = Reshape((self.action_shape_height, self.action_shape_width))(_out_actions)
+		self.ops.append(out_actions.name)
 		out_value = Dense(1, activation='linear')(dense_layer_2)
+		self.ops.append(out_values.name)
 
 		model = Model(inputs=[topology_input, routes_input, reachability_input], outputs=[out_actions, out_value])
 
@@ -128,10 +137,9 @@ class Brain:
 
 		op_names = [str(op.name) for op in tf.get_default_graph().get_operations()]
 
-		print(*(str((type(op), op.name, op)) for op in tf.get_default_graph().get_operations()), sep='\n')
-		print_op = tf.Print(action_t,  tf.get_default_graph().get_operations())
+		# print(*(str((type(op), op.name, op)) for op in tf.get_default_graph().get_operations()), sep='\n')
+		print_op = tf.Print(action_t,  self.ops)
 		
-		# print_op = tf.Print(action_t,  [str(op.name) for op in tf.get_default_graph().get_operations()])
 		with tf.control_dependencies([print_op]):
 			loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
 		
@@ -139,7 +147,7 @@ class Brain:
 		optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
 		minimize = optimizer.minimize(loss_total)
 
-		return topo_t, routes_t, reach_t, action_t, reward_t, minimize
+		return topo_t, routes_t, reach_t, action_t, reward_t, minimize, print_op
 
 	def get_weights(self):
 		tvars = tf.trainable_variables()
@@ -187,8 +195,8 @@ class Brain:
 		# print "state_mask: %s" % str(state_mask)
 		# print "reward value: %s" % str(reward)
 		
-		topo_t, routes_t, reach_t, action_t, reward_t, minimize = self.graph
-		self.session.run(minimize, feed_dict={topo_t: state_topo, routes_t: state_routes, reach_t: state_reach, action_t: action, reward_t: reward})
+		topo_t, routes_t, reach_t, action_t, reward_t, minimize, print_op = self.graph
+		self.session.run(minimize, print_op, feed_dict={topo_t: state_topo, routes_t: state_routes, reach_t: state_reach, action_t: action, reward_t: reward})
 		# self.get_weights()
 
 	def train_push(self, state, action, reward, state_):
