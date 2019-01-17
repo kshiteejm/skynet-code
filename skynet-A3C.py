@@ -50,6 +50,7 @@ class Brain:
 		self.action_shape_height = int(ACTION_SPACE.high[0])
 		self.action_shape_width = int(ACTION_SPACE.high[1])
 
+		selp.ops = []
 		self.model = self._build_model()
 		self.graph = self._build_graph(self.model)
 
@@ -64,13 +65,20 @@ class Brain:
 		reachability_input = Input(shape=self.reachability_shape)
 
 		merged_input = Concatenate(axis=1)([topology_input, routes_input, reachability_input])
+		self.ops.append(.name)
 		flattened_input = Flatten()(merged_input)
+		self.ops.append(.name)
 		dense_layer_1 = Dense(256, activation='relu')(flattened_input)
+		self.ops.append(.name)
 		dense_layer_2 = Dense(32, activation='relu')(dense_layer_1)
+		self.ops.append(.name)
 
 		_out_actions = Dense(self.action_shape_height*self.action_shape_width, activation='softmax')(dense_layer_2)
+		self.ops.append(.name)
 		out_actions = Reshape((self.action_shape_height, self.action_shape_width))(_out_actions)
+		self.ops.append(.name)
 		out_value = Dense(1, activation='linear')(dense_layer_2)
+		self.ops.append(.name)
 
 		model = Model(inputs=[topology_input, routes_input, reachability_input], outputs=[out_actions, out_value])
 
