@@ -1,7 +1,10 @@
 # some code fragments borrowed from Jaromir Janisch, 2017
 
+from __future__ import print_function
+
 import numpy as np
 import tensorflow as tf
+from tensorflow.python import debug as tf_debug
 
 import gym, time, random, threading
 import gym_skynet
@@ -10,21 +13,23 @@ from keras.models import *
 from keras.layers import *
 from keras import backend as K
 
+import itertools
+
 #-- constants
 ENV = 'Skynet-v0'
 
 RUN_TIME = 60
-THREADS = 2
-OPTIMIZERS = 2
+THREADS = 1
+OPTIMIZERS = 1
 THREAD_DELAY = 0.001
 
 GAMMA = 0.99
-N_STEP_RETURN = 5
+N_STEP_RETURN = 1
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
 EPS_START = 0.5
-EPS_STOP  = 0.1
-EPS_STEPS = 10000
+EPS_STOP  = 0.0
+EPS_STEPS = 20000
 
 MIN_BATCH = 32
 LEARNING_RATE = 5e-3
@@ -34,15 +39,21 @@ LOSS_ENTROPY = .01 	# entropy coefficient
 
 MODEL_VERSION = 1	# state-dependent
 
+DEBUG = False
+VERBOSE = True
+
 #---------
 class Brain:
 	train_queue = [ [[], [], []], [], [], [[], [], []], [] ]	# s, a, r, s', s' terminal mask
 	lock_queue = threading.Lock()
 
 	def __init__(self):
+		self.iteration = 0
 		self.session = tf.Session()
+		# self.session = K.get_session()
+		# self.session = tf_debug.LocalCLIDebugWrapperSession(self.session)
 		K.set_session(self.session)
-		K.manual_variable_initialization(True) # what happens here?
+		K.manual_variable_initialization(True)
 
 		self.topology_shape = OBSERVATION_SPACE.spaces["topology"].shape
 		self.routes_shape = OBSERVATION_SPACE.spaces["routes"].shape
@@ -50,7 +61,6 @@ class Brain:
 		self.action_shape_height = int(ACTION_SPACE.high[0])
 		self.action_shape_width = int(ACTION_SPACE.high[1])
 
-		selp.ops = []
 		self.model = self._build_model()
 		self.graph = self._build_graph(self.model)
 
@@ -65,20 +75,14 @@ class Brain:
 		reachability_input = Input(shape=self.reachability_shape)
 
 		merged_input = Concatenate(axis=1)([topology_input, routes_input, reachability_input])
-		self.ops.append(.name)
 		flattened_input = Flatten()(merged_input)
-		self.ops.append(.name)
-		dense_layer_1 = Dense(256, activation='relu')(flattened_input)
-		self.ops.append(.name)
-		dense_layer_2 = Dense(32, activation='relu')(dense_layer_1)
-		self.ops.append(.name)
+		self.dense_layer_1 = Dense(256, activation='relu')(flattened_input)
+		dense_layer_2 = Dense(32, activation='relu')(self.dense_layer_1)
+		# K.print_tensor(dense_layer_1, message='dense layer weights = ')
 
 		_out_actions = Dense(self.action_shape_height*self.action_shape_width, activation='softmax')(dense_layer_2)
-		self.ops.append(.name)
 		out_actions = Reshape((self.action_shape_height, self.action_shape_width))(_out_actions)
-		self.ops.append(.name)
 		out_value = Dense(1, activation='linear')(dense_layer_2)
-		self.ops.append(.name)
 
 		model = Model(inputs=[topology_input, routes_input, reachability_input], outputs=[out_actions, out_value])
 
@@ -95,7 +99,8 @@ class Brain:
 
 		model._make_predict_function()	# have to initialize before threading
 		
-		print model.summary()
+		if DEBUG:
+			print(model.summary())
 
 		return model
 
@@ -115,19 +120,35 @@ class Brain:
 
 		prob, avg_reward = model([topo_t, routes_t, reach_t])
 
-		log_prob = tf.log(tf.reduce_sum(prob * action_t, axis=1, keep_dims=True) + 1e-10)
+		log_prob = tf.log(tf.reduce_sum(prob * action_t, axis=1, keepdims=True) + 1e-10)
 		advantage = reward_t - avg_reward
 
 		loss_policy = - log_prob * tf.stop_gradient(advantage)									# maximize policy
 		loss_value  = LOSS_V * tf.square(advantage)												# minimize value error
-		entropy = LOSS_ENTROPY * tf.reduce_sum(prob * tf.log(prob + 1e-10), axis=1, keep_dims=True)	# maximize entropy (regularization)
+		entropy = LOSS_ENTROPY * tf.reduce_sum(prob * tf.log(prob + 1e-10), axis=1, keepdims=True)	# maximize entropy (regularization)
 
+		op_names = [str(op.name) for op in tf.get_default_graph().get_operations()]
+
+		print(*(str((type(op), op.name, op)) for op in tf.get_default_graph().get_operations()), sep='\n')
+		# print_op = tf.Print(action_t,  tf.get_default_graph().get_operations())
+		
+		# print_op = tf.Print(action_t,  [str(op.name) for op in tf.get_default_graph().get_operations()])
+		# with tf.control_dependencies([print_op]):
 		loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
+		
 
 		optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
 		minimize = optimizer.minimize(loss_total)
 
 		return topo_t, routes_t, reach_t, action_t, reward_t, minimize
+
+	def get_weights(self):
+		tvars = tf.trainable_variables()
+		print(tvars)
+		tvars_vals = self.session.run(tvars)
+		for var, val in zip(tvars, tvars_vals):
+			print(var.name, val)
+  		# return [v for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES) if v.name.endswith('weights:0')]
 
 	def optimize(self):
 		if len(self.train_queue[0][0]) < MIN_BATCH:
@@ -159,16 +180,26 @@ class Brain:
 		# print "action: %s, shape: %s" % (str(action), str(action.shape))
 		# # print "reward: %s, shape: %s" % (str(reward), str(reward.shape))
 
-		if len(state_topo) > 5*MIN_BATCH: print(("Optimizer alert! Minimizing batch of %d" % len(state_topo)))
+		if len(state_topo) > 5*MIN_BATCH: 
+			print("Optimizer alert! Minimizing batch of %d" % len(state_topo))
 
 		avg_reward = self.predict_avg_reward([state_topo_, state_routes_, state_reach_])
-		reward = reward + GAMMA_N * avg_reward * state_mask	# set v to 0 where s_ is terminal state
+		reward = reward + GAMMA_N * avg_reward * state_mask	# set avg_reward to 0 where state_ is terminal state
+		# print "state_mask: %s" % str(state_mask)
 		# print "reward value: %s" % str(reward)
 		
 		topo_t, routes_t, reach_t, action_t, reward_t, minimize = self.graph
-		self.session.run(minimize, feed_dict={topo_t: state_topo, routes_t: state_routes, reach_t: state_reach, action_t: action, reward_t: reward})
+		self.iteration = self.iteration + 1
+		np.save('prev_%d' % self.iteration, [l.get_weights() for l in self.model.layers])
+		mn = self.session.run(minimize, feed_dict={topo_t: state_topo, routes_t: state_routes, reach_t: state_reach, action_t: action, reward_t: reward})
+		np.save('fin_%d' % self.iteration, [l.get_weights() for l in self.model.layers])
+		print(mn)
+		# self.get_weights()
 
 	def train_push(self, state, action, reward, state_):
+		if DEBUG:
+			print("Training Datum: Routes: %s, Action: %s, Reward: %s" % (str(state["routes"]), str(action), str(reward)))
+
 		with self.lock_queue:
 			# print "routes shape: %s" % str(state["routes"].shape)
 			self.train_queue[0][0].append([state["topology"]])
@@ -178,6 +209,7 @@ class Brain:
 			self.train_queue[2].append([reward])
 
 			if state_ is None:
+				# print "STATE IS NONE"
 				self.train_queue[3][0].append([NULL_STATE["topology"]])
 				self.train_queue[3][1].append([NULL_STATE["routes"]])
 				self.train_queue[3][2].append([NULL_STATE["reachability"]])
@@ -201,19 +233,12 @@ class Brain:
 			prob, avg_reward = self.model.predict(state)
 			return prob
 
-	# def predict_prob(self, topo, routes, reach):
-	# 	with self.default_graph.as_default():
-	# 		# print state.shape
-	# 		prob, avg_reward = self.model.predict(topo, routes, reach)
-	# 		return prob
-
 	def predict_avg_reward(self, state):
 		with self.default_graph.as_default():
 			prob, avg_reward = self.model.predict(state)
 			return avg_reward
 
 #---------
-frames = 0
 class Agent:
 	def __init__(self, eps_start, eps_end, eps_steps, env):
 		self.eps_start = eps_start
@@ -228,36 +253,27 @@ class Agent:
 		self.action_shape_width = int(self.env.action_space.high[1])
 
 	def getEpsilon(self):
+		frames = FRAMES.next()
 		if frames >= self.eps_steps:
+			if frames == self.eps_steps:
+				if VERBOSE and not TESTING:
+					print("Switching to Pure Exploit")
 			return self.eps_end
 		else:
 			return self.eps_start + frames * (self.eps_end - self.eps_start) / self.eps_steps	# linearly interpolate
 
 	def act(self, state):
 		eps = self.getEpsilon()			
-		global frames; frames = frames + 1
+		FRAMES.next()
 
-		if random.random() < eps:
-			# action = (random.randint(1, ACTION.high[0]), random.randint(1, ACTION.high[1]))
-			# while (s[action[0]-1][action[1]-1] != 0):
-			# 	action = (random.randint(1, ACTION.high[0]), random.randint(1, ACTION.high[1]))
+		if random.random() < eps and not TESTING:
 			action = self.env.get_random_action()
 			return action, True
 		else:
-			# state_ = np.array([s.reshape(-1).tolist()])
 			topo = np.array([state["topology"]])
 			routes = np.array([state["routes"]])
 			reach = np.array([state["reachability"]])
 			prob = brain.predict_prob([topo, routes, reach])[0]
-
-			# # a = np.argmax(p)
-			# a = np.random.choice(ACTION.high[0]*ACTION.high[1], p=p)
-			# action = (a/ACTION.high[1] + 1, a%ACTION.high[1]+1)
-			# while (s[action[0]-1][action[1]-1] != 0):
-			# 	a = np.random.choice(ACTION.high[0]*ACTION.high[1], p=p)
-			# 	action = (a/ACTION.high[1] + 1, a%ACTION.high[1]+1)
-			# print p
-			# p = p.reshape((int(ACTION.high[0]), int(ACTION.high[1])))
 			action = self.env.get_random_action(p=prob)
 			return action, False
 	
@@ -303,13 +319,9 @@ class Environment(threading.Thread):
 
 	def __init__(self, render=False, eps_start=EPS_START, eps_end=EPS_STOP, eps_steps=EPS_STEPS):
 		threading.Thread.__init__(self)
+		self.num_instances = 0
+		self.deviation = 0.0
 		self.reset()
-
-		# self.stop_signal = False
-		# self.render = render
-		# self.env = gym.make(ENV)
-		# self.env.__init__(topo_size=4, num_flows=100)
-		# self.agent = Agent(eps_start, eps_end, eps_steps, self.env)
 	
 	def reset(self, render=False, eps_start=EPS_START, eps_end=EPS_STOP, eps_steps=EPS_STEPS):
 		self.stop_signal = False
@@ -318,30 +330,43 @@ class Environment(threading.Thread):
 		self.env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree')
 		self.agent = Agent(eps_start, eps_end, eps_steps, self.env)
 		self.time_begin = time.time()
+		self.unique_id = INSTANCE_NUM.next()
+		self.num_instances = self.num_instances + 1
+		if DEBUG:
+			print("INSTANCE NUMBER: %d" % self.unique_id)
 
 	def runEpisode(self, hard_reset = False):
 		state = self.env.reset()
+		if DEBUG:
+			print("Flow Details: %s" % str(self.env.flow_details))
 
 		while True:         
-			time.sleep(THREAD_DELAY) # yield 
+			time.sleep(THREAD_DELAY)
 
-			if self.render: self.env.render()
-
+			if self.render: 
+				self.env.render()
+			
 			action, is_rand = self.agent.act(state)
-			# print a
 			state_, reward, done, info = self.env.step(action)
+			if DEBUG:
+				print("Routes: %s" % str(state["routes"]))
+				print("Action: %s, Random: %s" % (str(action), str(is_rand)))
+				print("Reward: %s" % str(reward))
 
-			if done: # terminal state
-				# print state_
+			if done:
+				if DEBUG:
+					print("DONE")
 				state_ = None
-				# if reward > 0:
 				if not self.env.is_game_over:
+					time_now = time.time()
 					self.stop_signal = True
-				time_now = time.time()
-				print("TIME: %d, DEVIATION: %f" % ((time_now - self.time_begin), self.env.get_path_length_quality()))
-				break
-
-			self.agent.train(state, action, reward, state_)
+					instance_deviation = self.env.get_path_length_quality()
+					self.deviation = self.deviation + instance_deviation
+					if VERBOSE:
+						print("TIME: %d, DEVIATION: %f" % ((time_now - self.time_begin), instance_deviation))
+			
+			if not TESTING:
+				self.agent.train(state, action, reward, state_)
 
 			state = state_
 
@@ -349,9 +374,15 @@ class Environment(threading.Thread):
 				break
 
 	def run(self):
-		# while not self.stop_signal:
-		# 	self.runEpisode()
 		while True:
+			if not TESTING:
+				if self.unique_id > TRAINING_INSTANCE_LIMIT:
+					self.stop_signal = True
+					break
+			else:
+				if self.unique_id > TESTING_INSTANCE_LIMIT:
+					self.stop_signal = True
+					break
 			if not self.stop_signal:
 				self.runEpisode()
 			else:
@@ -370,12 +401,18 @@ class Optimizer(threading.Thread):
 
 	def run(self):
 		while not self.stop_signal:
-			brain.optimize()
+			brain.optimize() 
 
 	def stop(self):
 		self.stop_signal = True
 
 #-- main
+FRAMES = itertools.count()
+INSTANCE_NUM = itertools.count()
+TRAINING_INSTANCE_LIMIT = 1000
+TESTING_INSTANCE_LIMIT = 200
+TESTING = False
+
 _env = Environment(render=False, eps_start=0., eps_end=0.)
 OBSERVATION_SPACE = _env.env.observation_space
 ACTION_SPACE = _env.env.action_space
@@ -394,42 +431,41 @@ opts = [Optimizer() for i in range(OPTIMIZERS)]
 for o in opts:
 	o.start()
 
-# time_begin = time.time()
-
 for e in envs:
 	e.start()
 
-# time.sleep(RUN_TIME)
+for e in envs:
+	e.join()
 
-# for e in envs:
-# 	e.stop()
-# for e in envs:
-# 	e.join()
+for o in opts:
+	o.stop()
+for o in opts:
+	o.join()
 
-# print "SECOND INSTANCE"
+training_instances = 0
+training_deviation = 0.0
+for e in envs:
+	training_instances = training_instances + e.num_instances
+	training_deviation = training_deviation + e.deviation
+avg_training_deviation = training_deviation/(training_instances*1.0)
 
-# envs = [Environment() for i in range(THREADS)]
+if VERBOSE:
+	print("TRAINING PHASE ENDED.")
 
-# time_begin = time.time()
+TESTING = True
+INSTANCE_NUM = itertools.count()
+envs = [Environment() for i in range(THREADS)]
+test_instances = 0
+test_deviation = 0.0
+for e in envs:
+	e.start()
+for e in envs:
+	e.join()
+for e in envs:
+	test_instances = test_instances + e.num_instances
+	test_deviation = test_deviation + e.deviation
 
-# for e in envs:
-# 	e.start()
-
-# time.sleep(RUN_TIME)
-
-# for e in envs:
-# 	e.stop()
-# for e in envs:
-# 	e.join()
-
-# for o in opts:
-# 	o.stop()
-# for o in opts:
-# 	o.join()
-
-# print("Training finished")
-
-# env_test.start()
-# time.sleep(30)
-# env_test.stop()
-# env_test.join()
+avg_test_deviation = test_deviation/(test_instances*1.0)
+if VERBOSE:
+	print("AVG TRAIN DEVIATION: %f" % avg_training_deviation)
+	print("AVG TEST DEVIATION: %f"  % avg_test_deviation)
