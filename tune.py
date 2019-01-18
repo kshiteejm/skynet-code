@@ -14,7 +14,7 @@ SPACE = {
     # 'LOSS_ENTROPY': hp.uniform('LOSS_ENTROPY', ),
     'EPS_START': hp.uniform('EPS_START', 0.3, 0.7),
     'EPS_STOP': hp.uniform('EPS_STOP', 0.0, 0.3),
-    'EPS_STEPS': hp.uniform('EPS_STEPS', [i * 10000 for i in range(6)])
+    'EPS_STEPS': hp.choice('EPS_STEPS', [i * 10000 for i in range(6)])
 }
 
 

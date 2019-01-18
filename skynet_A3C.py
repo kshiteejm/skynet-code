@@ -257,15 +257,14 @@ class Brain:
 
 #---------
 class Agent:
-    def __init__(self, eps_start, eps_end, eps_steps, env, brain):
+    def __init__(self, eps_start, eps_end, eps_steps, env):
         self.eps_start = eps_start
         self.eps_end   = eps_end
         self.eps_steps = eps_steps
         self.env = env
-        self.brain = brain
-        self.gamma = self.brain.gamma
-        self.gamma_n = self.brain.gamma_n
-        self.n_step_return = self.brain.n_step_return
+        self.gamma = brain.gamma
+        self.gamma_n = brain.gamma_n
+        self.n_step_return = brain.n_step_return
 
         self.memory = []    # used for n_step return
         self.R = 0.
@@ -294,7 +293,7 @@ class Agent:
             topo = np.array([state["topology"]])
             routes = np.array([state["routes"]])
             reach = np.array([state["reachability"]])
-            prob = self.brain.predict_prob([topo, routes, reach])[0]
+            prob = brain.predict_prob([topo, routes, reach])[0]
             action = self.env.get_random_action(p=prob)
             return action, False
     
@@ -318,7 +317,7 @@ class Agent:
             while len(self.memory) > 0:
                 n = len(self.memory)
                 state, action, reward, state_ = get_sample(self.memory, n)
-                self.brain.train_push(state, action, reward, state_)
+                brain.train_push(state, action, reward, state_)
 
                 self.R = ( self.R - self.memory[0][2] ) / self.gamma
                 self.memory.pop(0)
@@ -327,7 +326,7 @@ class Agent:
 
         if len(self.memory) >= self.n_step_return:
             state, action, reward, state_ = get_sample(self.memory, self.n_step_return)
-            self.brain.train_push(state, action, reward, state_)
+            brain.train_push(state, action, reward, state_)
 
             self.R = self.R - self.memory[0][2]
             self.memory.pop(0)  
@@ -342,12 +341,13 @@ class Environment(threading.Thread):
         threading.Thread.__init__(self)
         self.num_instances = 0
         self.deviation = 0.0
-        self.reset()
-
         self.eps_start = eps_start
         self.eps_end = eps_end
         self.eps_steps = eps_steps
     
+        self.reset()
+
+        
     def reset(self, render=False, eps_start=None, eps_end=None, eps_steps=None):
         if eps_start is None: eps_start = self.eps_start
         if eps_end is None: eps_end = self.eps_end
@@ -357,7 +357,7 @@ class Environment(threading.Thread):
         self.render = render
         self.env = gym.make(ENV)
         self.env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree', deterministic=True)
-        self.agent = Agent(eps_start, eps_end, eps_steps, self.env, self.brain)
+        self.agent = Agent(eps_start, eps_end, eps_steps, self.env)
         self.time_begin = time.time()
         self.unique_id = INSTANCE_NUM.next()
         self.num_instances = self.num_instances + 1
@@ -425,13 +425,12 @@ class Environment(threading.Thread):
 class Optimizer(threading.Thread):
     stop_signal = False
 
-    def __init__(self, brain):
+    def __init__(self):
         threading.Thread.__init__(self)
-        self.brain = brain
 
     def run(self):
         while not self.stop_signal:
-            self.brain.optimize()
+            brain.optimize()
 
     def stop(self):
         self.stop_signal = True
@@ -442,7 +441,7 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
             min_batch=MIN_BATCH, loss_v=LOSS_V, loss_entropy=LOSS_ENTROPY,
             eps_start=EPS_START, eps_end=EPS_STOP, eps_steps=EPS_STEPS):
 
-    global OBSERVATION_SPACE, ACTION_SPACE, NULL_STATE, FRAMES, INSTANCE_NUM, TRAINING_INSTANCE_LIMIT, TESTING_INSTANCE_LIMIT, TESTING
+    global brain, OBSERVATION_SPACE, ACTION_SPACE, NULL_STATE, FRAMES, INSTANCE_NUM, TRAINING_INSTANCE_LIMIT, TESTING_INSTANCE_LIMIT, TESTING
 
     FRAMES = itertools.count()
     INSTANCE_NUM = itertools.count()
@@ -465,7 +464,7 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
                     loss_v=loss_v, loss_entropy=loss_entropy)   # brain is global in A3C
 
     envs = [Environment(eps_start=eps_start, eps_end=eps_end, eps_steps=eps_steps) for i in range(THREADS)]
-    opts = [Optimizer(brain) for i in range(OPTIMIZERS)]
+    opts = [Optimizer() for i in range(OPTIMIZERS)]
 
     for o in opts:
         o.start()
