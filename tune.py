@@ -30,6 +30,14 @@ def run(space):
                 eps_end=space['EPS_STOP'],
                 eps_steps=space['EPS_STEPS']
             )
+
+    with open('explore_skynet.txt', 'a') as log_file:
+        print(space, file=log_file)
+        print(val, file=log_file)
+        print('\n\n', file=log_file)
+    
+    print(space, val)
+
     return val
 
 
