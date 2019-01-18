@@ -449,10 +449,11 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
     TESTING_INSTANCE_LIMIT = 1000
     TESTING = False
 
-    _env = Environment(render=False, eps_start=eps_start, eps_end=eps_end)
-    OBSERVATION_SPACE = _env.env.observation_space
-    ACTION_SPACE = _env.env.action_space
-    NULL_STATE = _env.env.get_null_state()
+    _env = gym.make(ENV)
+    _env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree', deterministic=True)
+    OBSERVATION_SPACE = _env.observation_space
+    ACTION_SPACE = _env.action_space
+    NULL_STATE = _env.get_null_state()
     # STATE = env_test.env.observation_space.shape # 2D array shape with 0 or 1
     # # print "State: %d, %d" % (STATE[0], STATE[1])
     # ACTION = env_test.env.action_space # a tuple with non-zero inputs
@@ -460,8 +461,8 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
     # NO_STATE = np.zeros(STATE)
 
     brain = Brain(gamma=gamma, n_step_return=n_step_return, 
-                    learning_rate=learning_rate, min_batch=min_batch, 
-                    loss_v=loss_v, loss_entropy=loss_entropy)   # brain is global in A3C
+                learning_rate=learning_rate, min_batch=min_batch, 
+                loss_v=loss_v, loss_entropy=loss_entropy)   # brain is global in A3C
 
     envs = [Environment(eps_start=eps_start, eps_end=eps_end, eps_steps=eps_steps) for i in range(THREADS)]
     opts = [Optimizer() for i in range(OPTIMIZERS)]
