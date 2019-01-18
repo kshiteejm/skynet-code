@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib
+import sys
 
 tableau20 = [(31, 119, 180), (174, 199, 232), (255, 127, 14), (255, 187, 120),    
 			(44, 160, 44), (152, 223, 138), (214, 39, 40), (255, 152, 150),    
@@ -76,13 +77,15 @@ def plot_line(fname, xname, yname, xdata, ydata, xlim=None, ylim=None, xticks=No
 	pp.savefig(bbox_inches='tight')
 	pp.close()
 
-def get_results():
+def get_results(fname=None):
     x = []
     y = []
     instance_num = 1
     switched_to_exploit = 0
-    instance_num_limit = 2000
-    file = open("output", "r")
+    instance_num_limit = 10000
+    if fname == None:
+        fname = "output"
+    file = open(fname, "r")
     for line in file:
         line = line[:-1]
         if line.startswith("TIME"):
@@ -95,8 +98,12 @@ def get_results():
             switched_to_exploit = instance_num
         if instance_num >= instance_num_limit:
             break
-    plot_line('instance_v_quality.pdf', 'Instance Number', 'Deviation', x, y, marks=[(switched_to_exploit, 0)])
+    plot_line(fname+".pdf", 'Instance Number', 'Deviation', x, y, marks=[(switched_to_exploit, 0)])
     file.close()
 
 if __name__ == "__main__":
-    get_results()
+    if len(sys.argv) > 1:
+        fname = sys.argv[1]
+        get_results(fname=fname)
+    else:
+        get_results()

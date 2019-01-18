@@ -16,7 +16,7 @@ POS_INF = 100.0
 
 class SkynetEnv(gym.Env):
 
-    def __init__(self, topo_size=2, num_flows=1, topo_style='fat_tree'):
+    def __init__(self, topo_size=2, num_flows=1, topo_style='fat_tree', deterministic=False):
         self.__version__ = "0.1.0"
        
         self.is_game_over = False
@@ -51,7 +51,7 @@ class SkynetEnv(gym.Env):
         self.flow_switch_map = {}
         self.completed_flows = []
         self.incomplete_flows = []
-        self._init_flow_details()
+        self._init_flow_details(deterministic=deterministic)
         
 
         # observation space:
@@ -107,21 +107,26 @@ class SkynetEnv(gym.Env):
         return dict(topology=np.array(topology), routes=np.zeros(routes.shape), reachability=np.zeros(reachability.shape))
     
     # random endpoints for flows in the network
-    def _init_flow_details(self, initialize=True):
+    def _init_flow_details(self, initialize=True, deterministic=False):
         self.completed_flows = []
         self.incomplete_flows = range(1, self.num_flows + 1)
         self.is_game_over = False
         for flow_id in range(1, self.num_flows + 1):
-            if initialize:
-                src_switch_id = random.randint(1, self.num_edge_switches)
-                dst_switch_id = random.randint(1, self.num_edge_switches)
-                while src_switch_id == dst_switch_id:
-                    dst_switch_id = random.randint(1, self.num_edge_switches)
+            if deterministic:
+                src_switch_id = (flow_id%self.num_edge_switches) + 1
+                dst_switch_id = ((src_switch_id + self.num_edge_switches/2)%self.num_edge_switches) + 1
                 self.flow_details[flow_id] = [src_switch_id, dst_switch_id]
-                self.flow_switch_map[flow_id] = [src_switch_id]
             else:
-                src_switch_id, dst_switch_id = self.flow_details[flow_id]
-                self.flow_switch_map[flow_id] = [src_switch_id]
+                if initialize:
+                    src_switch_id = random.randint(1, self.num_edge_switches)
+                    dst_switch_id = random.randint(1, self.num_edge_switches)
+                    while src_switch_id == dst_switch_id:
+                        dst_switch_id = random.randint(1, self.num_edge_switches)
+                    self.flow_details[flow_id] = [src_switch_id, dst_switch_id]
+                    self.flow_switch_map[flow_id] = [src_switch_id]
+                else:
+                    src_switch_id, dst_switch_id = self.flow_details[flow_id]
+                    self.flow_switch_map[flow_id] = [src_switch_id]
         # print "flow details: %s" % str(self.flow_details)
 
     # initialization of map from switch to switch neighbors

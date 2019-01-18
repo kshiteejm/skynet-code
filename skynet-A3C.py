@@ -1,10 +1,10 @@
 # some code fragments borrowed from Jaromir Janisch, 2017
 
-from __future__ import print_function
+# from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.python import debug as tf_debug
+# from tensorflow.python import debug as tf_debug
 
 import gym, time, random, threading
 import gym_skynet
@@ -27,12 +27,12 @@ GAMMA = 0.99
 N_STEP_RETURN = 1
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
-EPS_START = 0.5
+EPS_START = 0.0
 EPS_STOP  = 0.0
 EPS_STEPS = 20000
 
 MIN_BATCH = 32
-LEARNING_RATE = 5e-3
+LEARNING_RATE = 5e-2
 
 LOSS_V = .5			# v loss coefficient
 LOSS_ENTROPY = .01 	# entropy coefficient
@@ -48,6 +48,8 @@ class Brain:
 	lock_queue = threading.Lock()
 
 	def __init__(self):
+		self.train_iteration = 0
+
 		self.session = tf.Session()
 		# self.session = K.get_session()
 		# self.session = tf_debug.LocalCLIDebugWrapperSession(self.session)
@@ -75,8 +77,8 @@ class Brain:
 
 		merged_input = Concatenate(axis=1)([topology_input, routes_input, reachability_input])
 		flattened_input = Flatten()(merged_input)
-		self.dense_layer_1 = Dense(256, activation='relu')(flattened_input)
-		dense_layer_2 = Dense(32, activation='relu')(self.dense_layer_1)
+		dense_layer_1 = Dense(256, activation='relu')(flattened_input)
+		dense_layer_2 = Dense(32, activation='relu')(dense_layer_1)
 		# K.print_tensor(dense_layer_1, message='dense layer weights = ')
 
 		_out_actions = Dense(self.action_shape_height*self.action_shape_width, activation='softmax')(dense_layer_2)
@@ -126,28 +128,30 @@ class Brain:
 		loss_value  = LOSS_V * tf.square(advantage)												# minimize value error
 		entropy = LOSS_ENTROPY * tf.reduce_sum(prob * tf.log(prob + 1e-10), axis=1, keepdims=True)	# maximize entropy (regularization)
 
-		op_names = [str(op.name) for op in tf.get_default_graph().get_operations()]
+		# op_names = [str(op.name) for op in tf.get_default_graph().get_operations()]
 
-		print(*(str((type(op), op.name, op)) for op in tf.get_default_graph().get_operations()), sep='\n')
-		print_op = tf.Print(action_t,  tf.get_default_graph().get_operations())
+		# print(*(str((type(op), op.name, op)) for op in tf.get_default_graph().get_operations()), sep='\n')
+		# print_op = tf.Print(action_t,  tf.get_default_graph().get_operations())
 		
-		# print_op = tf.Print(action_t,  [str(op.name) for op in tf.get_default_graph().get_operations()])
-		with tf.control_dependencies([print_op]):
-			loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
+		# print_op = tf.Print(action_t,  [reward_t])
+		# with tf.control_dependencies([print_op]):
+		# 	loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
 		
+		loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
 
-		optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
+		# optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
+		optimizer = tf.train.AdamOptimizer()
 		minimize = optimizer.minimize(loss_total)
 
 		return topo_t, routes_t, reach_t, action_t, reward_t, minimize
 
-	def get_weights(self):
-		tvars = tf.trainable_variables()
-		print(tvars)
-		tvars_vals = self.session.run(tvars)
-		for var, val in zip(tvars, tvars_vals):
-			print(var.name, val)
-  		# return [v for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES) if v.name.endswith('weights:0')]
+	# def get_weights(self):
+	# 	tvars = tf.trainable_variables()
+	# 	print(tvars)
+	# 	tvars_vals = self.session.run(tvars)
+	# 	for var, val in zip(tvars, tvars_vals):
+	# 		print(var.name, val)
+  	# 	# return [v for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES) if v.name.endswith('weights:0')]
 
 	def optimize(self):
 		if len(self.train_queue[0][0]) < MIN_BATCH:
@@ -164,6 +168,8 @@ class Brain:
 
 		# print "before vstack, topo shape: %s, route shape: %s" % (state[0][0].shape, state[1][0].shape)
 		
+		self.train_iteration = self.train_iteration + 1
+
 		state_topo = np.vstack(state[0])
 		state_routes = np.vstack(state[1])
 		state_reach = np.vstack(state[2])
@@ -188,7 +194,10 @@ class Brain:
 		# print "reward value: %s" % str(reward)
 		
 		topo_t, routes_t, reach_t, action_t, reward_t, minimize = self.graph
+
+		# np.save('prev_train_%d' % self.train_iteration, [l.get_weights() for l in self.model.layers])
 		self.session.run(minimize, feed_dict={topo_t: state_topo, routes_t: state_routes, reach_t: state_reach, action_t: action, reward_t: reward})
+		# np.save('after_train_%d' % self.train_iteration, [l.get_weights() for l in self.model.layers])
 		# self.get_weights()
 
 	def train_push(self, state, action, reward, state_):
@@ -225,11 +234,13 @@ class Brain:
 			# print state[0].shape
 			# print state[1].shape
 			# print state[2].shape
+			# np.save('predict_prob_%d' % self.train_iteration, [l.get_weights() for l in self.model.layers])
 			prob, avg_reward = self.model.predict(state)
 			return prob
 
 	def predict_avg_reward(self, state):
 		with self.default_graph.as_default():
+			# np.save('predict_avg_reward_%d' % self.train_iteration, [l.get_weights() for l in self.model.layers])
 			prob, avg_reward = self.model.predict(state)
 			return avg_reward
 
@@ -322,7 +333,7 @@ class Environment(threading.Thread):
 		self.stop_signal = False
 		self.render = render
 		self.env = gym.make(ENV)
-		self.env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree')
+		self.env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree', deterministic=True)
 		self.agent = Agent(eps_start, eps_end, eps_steps, self.env)
 		self.time_begin = time.time()
 		self.unique_id = INSTANCE_NUM.next()
@@ -404,8 +415,8 @@ class Optimizer(threading.Thread):
 #-- main
 FRAMES = itertools.count()
 INSTANCE_NUM = itertools.count()
-TRAINING_INSTANCE_LIMIT = 1000
-TESTING_INSTANCE_LIMIT = 200
+TRAINING_INSTANCE_LIMIT = 10000
+TESTING_INSTANCE_LIMIT = 1000
 TESTING = False
 
 _env = Environment(render=False, eps_start=0., eps_end=0.)
