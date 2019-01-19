@@ -19,7 +19,7 @@ import itertools
 ENV = 'Skynet-v0'
 
 RUN_TIME = 60
-THREADS = 1
+THREADS = 8
 OPTIMIZERS = 1
 THREAD_DELAY = 0.001
 
@@ -139,8 +139,8 @@ class Brain:
 		
 		loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
 
-		# optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
-		optimizer = tf.train.AdamOptimizer()
+		optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
+		# optimizer = tf.train.AdamOptimizer()
 		minimize = optimizer.minimize(loss_total)
 
 		return topo_t, routes_t, reach_t, action_t, reward_t, minimize
@@ -326,6 +326,7 @@ class Environment(threading.Thread):
 	def __init__(self, render=False, eps_start=EPS_START, eps_end=EPS_STOP, eps_steps=EPS_STEPS):
 		threading.Thread.__init__(self)
 		self.num_instances = 0
+		self.instance_iter = 0
 		self.deviation = 0.0
 		self.reset()
 	
@@ -333,11 +334,13 @@ class Environment(threading.Thread):
 		self.stop_signal = False
 		self.render = render
 		self.env = gym.make(ENV)
-		self.env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree', deterministic=True)
+		# self.env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree', deterministic=True)
+		self.env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree')
 		self.agent = Agent(eps_start, eps_end, eps_steps, self.env)
 		self.time_begin = time.time()
 		self.unique_id = INSTANCE_NUM.next()
 		self.num_instances = self.num_instances + 1
+		self.instance_iter = 0
 		if DEBUG:
 			print("INSTANCE NUMBER: %d" % self.unique_id)
 
@@ -366,6 +369,7 @@ class Environment(threading.Thread):
 				if not self.env.is_game_over:
 					time_now = time.time()
 					self.stop_signal = True
+					self.instance_iter = self.instance_iter + 1
 					instance_deviation = self.env.get_path_length_quality()
 					self.deviation = self.deviation + instance_deviation
 					if VERBOSE:
@@ -392,8 +396,16 @@ class Environment(threading.Thread):
 			if not self.stop_signal:
 				self.runEpisode()
 			else:
-				self.reset()
-				self.runEpisode()
+				if not TESTING:
+					if self.instance_iter >= PER_INSTANCE_LIMIT:
+						self.reset()
+						self.runEpisode()
+					else:
+						self.stop_signal = False
+						self.runEpisode()
+				else:
+					self.reset()
+					self.runEpisode()
 
 	def stop(self):
 		self.stop_signal = True
@@ -415,7 +427,8 @@ class Optimizer(threading.Thread):
 #-- main
 FRAMES = itertools.count()
 INSTANCE_NUM = itertools.count()
-TRAINING_INSTANCE_LIMIT = 10000
+TRAINING_INSTANCE_LIMIT = 1000
+PER_INSTANCE_LIMIT = 100
 TESTING_INSTANCE_LIMIT = 1000
 TESTING = False
 
@@ -453,7 +466,7 @@ training_deviation = 0.0
 for e in envs:
 	training_instances = training_instances + e.num_instances
 	training_deviation = training_deviation + e.deviation
-avg_training_deviation = training_deviation/(training_instances*1.0)
+avg_training_deviation = training_deviation/(1.0*training_instances*PER_INSTANCE_LIMIT)
 
 if VERBOSE:
 	print("TRAINING PHASE ENDED.")

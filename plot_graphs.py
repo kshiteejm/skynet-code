@@ -82,7 +82,7 @@ def get_results(fname=None):
     y = []
     instance_num = 1
     switched_to_exploit = 0
-    instance_num_limit = 10000
+    instance_num_limit = -1
     if fname == None:
         fname = "output"
     file = open(fname, "r")
@@ -96,7 +96,7 @@ def get_results(fname=None):
                 instance_num = instance_num + 1
         if line.startswith("Switching"):
             switched_to_exploit = instance_num
-        if instance_num >= instance_num_limit:
+        if instance_num_limit > 0 and instance_num >= instance_num_limit:
             break
     plot_line(fname+".pdf", 'Instance Number', 'Deviation', x, y, marks=[(switched_to_exploit, 0)])
     file.close()

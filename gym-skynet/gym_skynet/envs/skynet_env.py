@@ -85,6 +85,12 @@ class SkynetEnv(gym.Env):
         self.viewer = None
 
     def _init_state(self):
+        self.state = dict(
+            topology=np.zeros((self.num_switches, self.num_switches), dtype=np.uint8),
+            routes=np.zeros((self.num_flows, self.num_switches), dtype=np.uint8),
+            reachability=np.zeros((self.num_flows, self.num_switches), dtype=np.uint8)
+        )
+        
         topology = self.state["topology"]
         routes = self.state["routes"]
         reachability = self.state["reachability"]
@@ -116,6 +122,7 @@ class SkynetEnv(gym.Env):
                 src_switch_id = (flow_id%self.num_edge_switches) + 1
                 dst_switch_id = ((src_switch_id + self.num_edge_switches/2)%self.num_edge_switches) + 1
                 self.flow_details[flow_id] = [src_switch_id, dst_switch_id]
+                self.flow_switch_map[flow_id] = [src_switch_id]
             else:
                 if initialize:
                     src_switch_id = random.randint(1, self.num_edge_switches)
