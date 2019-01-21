@@ -39,6 +39,8 @@ LOSS_ENTROPY = .01 	# entropy coefficient
 
 MODEL_VERSION = 1	# state-dependent
 
+TOPO = True
+
 DEBUG = False
 VERBOSE = True
 
@@ -61,35 +63,46 @@ class Brain:
 		self.reachability_shape = OBSERVATION_SPACE.spaces["reachability"].shape
 		self.action_shape_height = int(ACTION_SPACE.high[0])
 		self.action_shape_width = int(ACTION_SPACE.high[1])
+		self.next_hop_feature_shape = 1
 
 		self.model = self._build_model()
 		self.graph = self._build_graph(self.model)
 
+		self.next_hop_priority_graph = self._build_next_hop_priority_graph()
+		self.next_hop_priority_model = self._build_next_hop_priority_model()
+		self.next_hop_probabilities_graph = self.next_hop_probabilities_graph()
+
 		self.session.run(tf.global_variables_initializer())
 		self.default_graph = tf.get_default_graph()
 
-		self.default_graph.finalize()	# avoid modifications
+		# self.default_graph.finalize()	# avoid modifications
 
 	def _build_model(self):
-		topology_input = Input(shape=self.topology_shape)
+		if TOPO:
+			topology_input = Input(shape=self.topology_shape)
 		routes_input = Input(shape=self.routes_shape)
 		reachability_input = Input(shape=self.reachability_shape)
 
-		merged_input = Concatenate(axis=1)([topology_input, routes_input, reachability_input])
+		if TOPO:
+			merged_input = Concatenate(axis=1)([topology_input, routes_input, reachability_input])
+		else:
+			merged_input = Concatenate(axis=1)([routes_input, reachability_input])
 		flattened_input = Flatten()(merged_input)
 		dense_layer_1 = Dense(256, activation='relu')(flattened_input)
 		dense_layer_2 = Dense(32, activation='relu')(dense_layer_1)
-		# K.print_tensor(dense_layer_1, message='dense layer weights = ')
 
 		_out_actions = Dense(self.action_shape_height*self.action_shape_width, activation='softmax')(dense_layer_2)
 		out_actions = Reshape((self.action_shape_height, self.action_shape_width))(_out_actions)
 		out_value = Dense(1, activation='linear')(dense_layer_2)
 
-		model = Model(inputs=[topology_input, routes_input, reachability_input], outputs=[out_actions, out_value])
+		if TOPO:
+			model = Model(inputs=[topology_input, routes_input, reachability_input], outputs=[out_actions, out_value])
+		else:
+			model = Model(inputs=[routes_input, reachability_input], outputs=[out_actions, out_value])
 
-		# # input layer dimensions: number of flows * number of links
-		# l_input = Input(batch_shape=(None, int(STATE[0])*int(STATE[1])))
-		# l_dense_1 = Dense(32, activation='relu')(l_input)
+		# # input layer dimensions: number of flows * numbeall_next_hop_features_array
+		# l_input = Input(batch_shape=(None, int(STATE[0])*all_next_hop_features_array
+		# l_dense_1 = Dense(32, activation='relu')(l_input)all_next_hop_features_array
 		# l_dense_2 = Dense(16, activation='relu')(l_dense_1)
 
 		# # output layer dimensions: number of flows * number of links
@@ -105,6 +118,34 @@ class Brain:
 
 		return model
 
+	def _build_next_hop_priority_model(self):
+		next_hop_feature = Input(shape=self.next_hop_feature_shape)
+		dense_layer_1 = Dense(16, activation='relu')(next_hop_feature)
+		out_priority = Dense(1, activation='linear')(dense_layer_1)
+		model = Model(inputs=[next_hop_feature], outputs=[out_priority])
+		model._make_predict_function()
+		return model
+	
+	def _build_next_hop_priority_graph(self):
+		with tf.Graph().as_default() as next_hop_priority_graph:
+			next_hop_feature = tf.placeholder(tf.float32, shape=self.next_hop_feature_shape, name="feature")
+			dense_layer_1 = tf.layers.dense(next_hop_feature, 16, activation=tf.nn.relu)
+			out_priority = tf.layers.dense(dense_layer_1, 1, name="priority") # linear activation
+		return next_hop_priority_graph.as_graph_def()
+
+	def _build_next_hop_probabilities_graph(self):
+		with tf.Graph().as_default() as next_hop_probabilities_graph:
+			all_next_hop_features = tf.placeholder(tf.float32, shape=(None, self.next_hop_feature_shape))
+			dense_layer_2 = tf.layers.flatten(all_next_hop_features)
+			reward = tf.layers.dense(dense_layer_2, 1, name="reward")
+			priorities = tf.map_fn(lambda x: tf.import_graph_def(self.next_hop_priority_graph, input_map={"feature:0": x}, return_elements=["priority:0"]), all_next_hop_features)
+			probabilities = tf.nn.softmax(priorities)
+			actual_probabilities = tf.placeholder(tf.float32, shape=(None,))
+			log_prob = tf.log(tf.reduce_sum(probabilities*actual_probabilities) + 1e-10)
+			advantage = 
+		return next_hop_probabilities_graph.as_graph_def()
+
+
 	def _build_graph(self, model):
 		# s_t = tf.placeholder(tf.float32, shape=(None, int(STATE[0])*int(STATE[1])))
 		# a_t = tf.placeholder(tf.float32, shape=(None, int(ACTION.high[0])*int(ACTION.high[1])))
@@ -112,14 +153,18 @@ class Brain:
 		
 		# prob, avg_value = model(s_t)
 
-		topo_t = tf.placeholder(tf.float32, shape=(None, self.topology_shape[0], self.topology_shape[1]))
+		if TOPO:
+			topo_t = tf.placeholder(tf.float32, shape=(None, self.topology_shape[0], self.topology_shape[1]))
 		routes_t = tf.placeholder(tf.float32, shape=(None, self.routes_shape[0], self.routes_shape[1]))
 		reach_t = tf.placeholder(tf.float32, shape=(None, self.reachability_shape[0], self.reachability_shape[1]))
 
 		action_t = tf.placeholder(tf.float32, shape=(None, self.action_shape_height, self.action_shape_width))
 		reward_t = tf.placeholder(tf.float32, shape=(None, 1))
 
-		prob, avg_reward = model([topo_t, routes_t, reach_t])
+		if TOPO:
+			prob, avg_reward = model([topo_t, routes_t, reach_t])
+		else:
+			prob, avg_reward = model([routes_t, reach_t])
 
 		log_prob = tf.log(tf.reduce_sum(prob * action_t, axis=1, keepdims=True) + 1e-10)
 		advantage = reward_t - avg_reward
@@ -143,7 +188,10 @@ class Brain:
 		# optimizer = tf.train.AdamOptimizer()
 		minimize = optimizer.minimize(loss_total)
 
-		return topo_t, routes_t, reach_t, action_t, reward_t, minimize
+		if TOPO:
+			return topo_t, routes_t, reach_t, action_t, reward_t, minimize
+		else:
+			return routes_t, reach_t, action_t, reward_t, minimize
 
 	# def get_weights(self):
 	# 	tvars = tf.trainable_variables()
@@ -163,40 +211,51 @@ class Brain:
 				return 									# we can't yield inside lock
 
 			state, action, reward, state_, state_mask = self.train_queue
-			# s, a, r, s_, s_mask = self.train_queue
 			self.train_queue = [ [[], [], []], [], [], [[], [], []], [] ]
-
-		# print "before vstack, topo shape: %s, route shape: %s" % (state[0][0].shape, state[1][0].shape)
 		
 		self.train_iteration = self.train_iteration + 1
 
-		state_topo = np.vstack(state[0])
-		state_routes = np.vstack(state[1])
-		state_reach = np.vstack(state[2])
-		action = np.vstack(action)
-		reward = np.vstack(reward)
-		state_topo_ = np.vstack(state_[0])
-		state_routes_ = np.vstack(state_[1])
-		state_reach_ = np.vstack(state_[2])
-		state_mask = np.vstack(state_mask)
+		if TOPO:
+			state_topo = np.vstack(state[0])
+			state_routes = np.vstack(state[1])
+			state_reach = np.vstack(state[2])
+			action = np.vstack(action)
+			reward = np.vstack(reward)
+			state_topo_ = np.vstack(state_[0])
+			state_routes_ = np.vstack(state_[1])
+			state_reach_ = np.vstack(state_[2])
+			state_mask = np.vstack(state_mask)
+		else:
+			state_routes = np.vstack(state[0])
+			state_reach = np.vstack(state[1])
+			action = np.vstack(action)
+			reward = np.vstack(reward)
+			state_routes_ = np.vstack(state_[0])
+			state_reach_ = np.vstack(state_[1])
+			state_mask = np.vstack(state_mask)
+
+		if len(state_routes) > 5*MIN_BATCH: 
+			print("Optimizer alert! Minimizing batch of %d" % len(state_routes))
+
+		if TOPO:
+			avg_reward = self.predict_avg_reward([state_topo_, state_routes_, state_reach_])
+		else:
+			avg_reward = self.predict_avg_reward([state_routes_, state_reach_])
 		
-		# # print "topo: %s, shape: %s" % (str(state_topo), str(state_topo[0].shape))
-		# print "routes: %s, shape: %s" % (str(state_routes), str(state_routes.shape))
-		# print "action: %s, shape: %s" % (str(action), str(action.shape))
-		# # print "reward: %s, shape: %s" % (str(reward), str(reward.shape))
-
-		if len(state_topo) > 5*MIN_BATCH: 
-			print("Optimizer alert! Minimizing batch of %d" % len(state_topo))
-
-		avg_reward = self.predict_avg_reward([state_topo_, state_routes_, state_reach_])
 		reward = reward + GAMMA_N * avg_reward * state_mask	# set avg_reward to 0 where state_ is terminal state
 		# print "state_mask: %s" % str(state_mask)
 		# print "reward value: %s" % str(reward)
 		
-		topo_t, routes_t, reach_t, action_t, reward_t, minimize = self.graph
+		if TOPO:
+			topo_t, routes_t, reach_t, action_t, reward_t, minimize = self.graph
+		else:
+			routes_t, reach_t, action_t, reward_t, minimize = self.graph
 
 		# np.save('prev_train_%d' % self.train_iteration, [l.get_weights() for l in self.model.layers])
-		self.session.run(minimize, feed_dict={topo_t: state_topo, routes_t: state_routes, reach_t: state_reach, action_t: action, reward_t: reward})
+		if TOPO:
+			self.session.run(minimize, feed_dict={topo_t: state_topo, routes_t: state_routes, reach_t: state_reach, action_t: action, reward_t: reward})
+		else:
+			self.session.run(minimize, feed_dict={routes_t: state_routes, reach_t: state_reach, action_t: action, reward_t: reward})
 		# np.save('after_train_%d' % self.train_iteration, [l.get_weights() for l in self.model.layers])
 		# self.get_weights()
 
@@ -206,23 +265,39 @@ class Brain:
 
 		with self.lock_queue:
 			# print "routes shape: %s" % str(state["routes"].shape)
-			self.train_queue[0][0].append([state["topology"]])
-			self.train_queue[0][1].append([state["routes"]])
-			self.train_queue[0][2].append([state["reachability"]])
-			self.train_queue[1].append([action])
-			self.train_queue[2].append([reward])
+			if TOPO:
+				self.train_queue[0][0].append([state["topology"]])
+				self.train_queue[0][1].append([state["routes"]])
+				self.train_queue[0][2].append([state["reachability"]])
+				self.train_queue[1].append([action])
+				self.train_queue[2].append([reward])
+			else:
+				self.train_queue[0][0].append([state["routes"]])
+				self.train_queue[0][1].append([state["reachability"]])
+				self.train_queue[1].append([action])
+				self.train_queue[2].append([reward])
 
 			if state_ is None:
 				# print "STATE IS NONE"
-				self.train_queue[3][0].append([NULL_STATE["topology"]])
-				self.train_queue[3][1].append([NULL_STATE["routes"]])
-				self.train_queue[3][2].append([NULL_STATE["reachability"]])
-				self.train_queue[4].append([0.])
-			else:	
-				self.train_queue[3][0].append([state_["topology"]])
-				self.train_queue[3][1].append([state_["routes"]])
-				self.train_queue[3][2].append([state_["reachability"]])
-				self.train_queue[4].append([1.])
+				if TOPO:
+					self.train_queue[3][0].append([NULL_STATE["topology"]])
+					self.train_queue[3][1].append([NULL_STATE["routes"]])
+					self.train_queue[3][2].append([NULL_STATE["reachability"]])
+					self.train_queue[4].append([0.])
+				else:
+					self.train_queue[3][0].append([NULL_STATE["routes"]])
+					self.train_queue[3][1].append([NULL_STATE["reachability"]])
+					self.train_queue[4].append([0.])
+			else:
+				if TOPO:
+					self.train_queue[3][0].append([state_["topology"]])
+					self.train_queue[3][1].append([state_["routes"]])
+					self.train_queue[3][2].append([state_["reachability"]])
+					self.train_queue[4].append([1.])
+				else:
+					self.train_queue[3][0].append([state_["routes"]])
+					self.train_queue[3][1].append([state_["reachability"]])
+					self.train_queue[4].append([1.])
 
 	def predict(self, state):
 		with self.default_graph.as_default():
@@ -279,7 +354,10 @@ class Agent:
 			topo = np.array([state["topology"]])
 			routes = np.array([state["routes"]])
 			reach = np.array([state["reachability"]])
-			prob = brain.predict_prob([topo, routes, reach])[0]
+			if TOPO:
+				prob = brain.predict_prob([topo, routes, reach])[0]
+			else:
+				prob = brain.predict_prob([routes, reach])[0]
 			action = self.env.get_random_action(p=prob)
 			return action, False
 	
@@ -427,12 +505,13 @@ class Optimizer(threading.Thread):
 #-- main
 FRAMES = itertools.count()
 INSTANCE_NUM = itertools.count()
-TRAINING_INSTANCE_LIMIT = 1000
+TRAINING_INSTANCE_LIMIT = 2000
 PER_INSTANCE_LIMIT = 100
 TESTING_INSTANCE_LIMIT = 1000
 TESTING = False
 
 _env = Environment(render=False, eps_start=0., eps_end=0.)
+
 OBSERVATION_SPACE = _env.env.observation_space
 ACTION_SPACE = _env.env.action_space
 NULL_STATE = _env.env.get_null_state()
