@@ -15,6 +15,8 @@ from keras import backend as K
 
 import itertools
 
+import deepwalk
+
 #-- constants
 ENV = 'Skynet-v0'
 
@@ -550,11 +552,11 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
     OBSERVATION_SPACE = _env.observation_space
     ACTION_SPACE = _env.action_space
     NULL_STATE = _env.get_null_state()
-    # STATE = env_test.env.observation_space.shape # 2D array shape with 0 or 1
-    # # print "State: %d, %d" % (STATE[0], STATE[1])
-    # ACTION = env_test.env.action_space # a tuple with non-zero inputs
-    # # print "Action: %d, %d" % (ACTION.high[0], ACTION.high[1])
-    # NO_STATE = np.zeros(STATE)
+
+    global vectors
+    adj_matrix = _env.state["topology"]
+    vectors = deepwalk.get_deepwalk_representation(adj_matrix)
+    return
 
     brain = Brain(gamma=gamma, n_step_return=n_step_return, 
                 learning_rate=learning_rate, min_batch=min_batch, 
