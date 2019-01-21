@@ -4,3 +4,5 @@
 /logs
 *~
 .ipynb_checkpoints
+skynet-tune/
+*.DS_Store
