@@ -79,8 +79,6 @@ class Brain:
         self.session.run(tf.global_variables_initializer())
         self.default_graph = tf.get_default_graph()
 
-        self.default_graph.finalize()   # avoid modifications
-
     def _build_model(self):
         topology_input = Input(shape=self.topology_shape)
         routes_input = Input(shape=self.routes_shape)
@@ -508,6 +506,10 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
     if VERBOSE:
         print("AVG TRAIN DEVIATION: %f" % avg_training_deviation)
         print("AVG TEST DEVIATION: %f"  % avg_test_deviation)
+
+    brain.session.close()
+    tf.reset_default_graph()
+    del brain
 
     return avg_test_deviation
 
