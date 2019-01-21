@@ -9,14 +9,16 @@ from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 import logging
 
-from . import graph
-from . import walks as serialized_walks
+import graph
+import walks as serialized_walks
 from gensim.models import Word2Vec
 from .skipgram import Skipgram
 
 from six import text_type as unicode
 from six import iteritems
 from six.moves import range
+
+from scipy.sparse import coo_matrix
 
 import psutil
 from multiprocessing import cpu_count
@@ -50,7 +52,7 @@ def get_deepwalk_representation(adj_matrix, number_walks=NUMBER_WALKS, walk_leng
                                 representation_size=REPRESENTATION_SIZE, window_size=WINDOW_SIZE, 
                                 max_memory_data_size=MAX_MEMORY_DATA_SIZE, workers=WORKERS, seed=SEED,
                                 vertex_freq_degree=False):
-    G = graph.from_numpy(adj_matrix)
+    G = graph.from_numpy(coo_matrix(adj_matrix))
 
     num_walks = len(G.nodes()) * number_walks
 
@@ -88,4 +90,4 @@ def get_deepwalk_representation(adj_matrix, number_walks=NUMBER_WALKS, walk_leng
                                          size=representation_size,
                                          window=window_size, min_count=0, trim_rule=None, workers=workers)
 
-    return model.wv
+    return model.wv.vectors
