@@ -52,13 +52,16 @@ class SkynetEnv(gym.Env):
         self.completed_flows = []
         self.incomplete_flows = []
         self._init_flow_details(deterministic=deterministic)
+
+        # node (per-switch) features
+        self.node_features = None
+        self._init_node_features(node_features=node_features)
         
         # observation space:
         self.observation_space = spaces.Dict(dict(
             topology=spaces.Box(low=0, high=1, shape=(self.num_switches, self.num_switches), dtype=np.uint8),
             routes=spaces.Box(low=0, high=1, shape=(self.num_flows, self.num_switches), dtype=np.uint8),
-            reachability=spaces.Box(low=0, high=1, shape=(self.num_flows, self.num_switches), dtype=np.uint8),
-            node_features=spaces.Box(low=-1.0, high=1.0, shape=node_features.shape, dtype=np.float)
+            reachability=spaces.Box(low=0, high=1, shape=(self.num_flows, self.num_switches), dtype=np.uint8)
         ))
 
         # action space:
@@ -69,7 +72,7 @@ class SkynetEnv(gym.Env):
             topology=np.zeros((self.num_switches, self.num_switches), dtype=np.uint8),
             routes=np.zeros((self.num_flows, self.num_switches), dtype=np.uint8),
             reachability=np.zeros((self.num_flows, self.num_switches), dtype=np.uint8),
-            node_features=np.zeros(node_features.shape)
+            node_features=np.zeros(self.node_features.shape, dtype=np.float)
         )
 
         self._init_state()
@@ -84,6 +87,12 @@ class SkynetEnv(gym.Env):
         # self.state = np.zeros((self.num_flows, self.num_links), dtype=np.uint8)
 
         self.viewer = None
+    
+    def _init_node_features(self, node_features):
+        _node_features = []
+        for node_feature in node_features:
+            _node_features.append(node_feature.extend([0, 0, 0]))
+        self.node_features = np.array(_node_features)
 
     def _init_state(self):
         self.state = dict(
@@ -106,6 +115,10 @@ class SkynetEnv(gym.Env):
             routes[flow_id-1][src_switch_id-1] = 1
             reachability[flow_id-1][src_switch_id-1] = 1
             reachability[flow_id-1][dst_switch_id-1] = 1
+        # update next_hop_features
+        # for 
+        
+
     
     def get_null_state(self):
         topology = self.state["topology"]

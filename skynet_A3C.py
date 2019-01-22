@@ -478,7 +478,7 @@ class Agent:
 class Environment(threading.Thread):
     # stop_signal = False
 
-    def __init__(self, render=False, eps_start=EPS_START, eps_end=EPS_STOP, eps_steps=EPS_STEPS, per_instance_limit=PER_INSTANCE_LIMIT):
+    def __init__(self, render=False, eps_start=EPS_START, eps_end=EPS_STOP, eps_steps=EPS_STEPS, per_instance_limit=PER_INSTANCE_LIMIT, node_features=None):
         threading.Thread.__init__(self)
         self.num_instances = 0
         self.instance_iter = 0
@@ -487,6 +487,7 @@ class Environment(threading.Thread):
         self.eps_end = eps_end
         self.eps_steps = eps_steps
         self.per_instance_limit = per_instance_limit
+        self.node_features = node_features
 
         self.reset()
     
@@ -501,7 +502,7 @@ class Environment(threading.Thread):
         self.render = render
         self.env = gym.make(ENV)
         # self.env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree', deterministic=True)
-        self.env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree')
+        self.env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree', node_features=self.node_features)
         self.agent = Agent(eps_start, eps_end, eps_steps, self.env)
         self.time_begin = time.time()
         self.unique_id = INSTANCE_NUM.next()
@@ -611,16 +612,16 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
     ACTION_SPACE = _env.action_space
     NULL_STATE = _env.get_null_state()
 
-    global vectors
+    global node_features
     adj_matrix = _env.state["topology"]
-    vectors = deepwalk.get_deepwalk_representation(adj_matrix)
+    node_features = deepwalk.get_deepwalk_representation(adj_matrix)
     # return
 
     brain = Brain(gamma=gamma, n_step_return=n_step_return, 
                 learning_rate=learning_rate, min_batch=min_batch, 
                 loss_v=loss_v, loss_entropy=loss_entropy)   # brain is global in A3C
 
-    envs = [Environment(eps_start=eps_start, eps_end=eps_end, eps_steps=eps_steps, per_instance_limit=per_instance_limit) for i in range(THREADS)]
+    envs = [Environment(eps_start=eps_start, eps_end=eps_end, eps_steps=eps_steps, per_instance_limit=per_instance_limit, node_features=node_features) for i in range(THREADS)]
     opts = [Optimizer() for i in range(OPTIMIZERS)]
 
     for o in opts:
