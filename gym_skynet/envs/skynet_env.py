@@ -16,7 +16,7 @@ POS_INF = 100.0
 
 class SkynetEnv(gym.Env):
 
-    def __init__(self, topo_size=2, num_flows=1, topo_style='fat_tree', deterministic=False):
+    def __init__(self, topo_size=2, num_flows=1, topo_style='fat_tree', deterministic=False, node_features=None):
         self.__version__ = "0.1.0"
        
         self.is_game_over = False
@@ -53,12 +53,12 @@ class SkynetEnv(gym.Env):
         self.incomplete_flows = []
         self._init_flow_details(deterministic=deterministic)
         
-
         # observation space:
         self.observation_space = spaces.Dict(dict(
             topology=spaces.Box(low=0, high=1, shape=(self.num_switches, self.num_switches), dtype=np.uint8),
             routes=spaces.Box(low=0, high=1, shape=(self.num_flows, self.num_switches), dtype=np.uint8),
-            reachability=spaces.Box(low=0, high=1, shape=(self.num_flows, self.num_switches), dtype=np.uint8)
+            reachability=spaces.Box(low=0, high=1, shape=(self.num_flows, self.num_switches), dtype=np.uint8),
+            node_features=spaces.Box(low=-1.0, high=1.0, shape=node_features.shape, dtype=np.float)
         ))
 
         # action space:
@@ -68,7 +68,8 @@ class SkynetEnv(gym.Env):
         self.state = dict(
             topology=np.zeros((self.num_switches, self.num_switches), dtype=np.uint8),
             routes=np.zeros((self.num_flows, self.num_switches), dtype=np.uint8),
-            reachability=np.zeros((self.num_flows, self.num_switches), dtype=np.uint8)
+            reachability=np.zeros((self.num_flows, self.num_switches), dtype=np.uint8),
+            node_features=np.zeros(node_features.shape)
         )
 
         self._init_state()

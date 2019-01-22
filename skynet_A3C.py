@@ -70,22 +70,24 @@ class Brain:
         self.session = tf.Session()
         # self.session = K.get_session()
         # self.session = tf_debug.LocalCLIDebugWrapperSession(self.session)
-        K.set_session(self.session)
-        K.manual_variable_initialization(True)
+        # K.set_session(self.session)
+        # K.manual_variable_initialization(True)
 
         self.topology_shape = OBSERVATION_SPACE.spaces["topology"].shape
         self.routes_shape = OBSERVATION_SPACE.spaces["routes"].shape
         self.reachability_shape = OBSERVATION_SPACE.spaces["reachability"].shape
         self.action_shape_height = int(ACTION_SPACE.high[0])
         self.action_shape_width = int(ACTION_SPACE.high[1])
-        self.next_hop_feature_shape = 1
+        self.next_hop_feature_shape = list(vectors[0].shape)
 
-        self.model = self._build_model()
-        self.graph = self._build_graph(self.model)
+        # self.model = self._build_model()
+        # self.graph = self._build_graph(self.model)
 
         self.next_hop_priority_graph = self._build_next_hop_priority_graph()
-        self.next_hop_priority_model = self._build_next_hop_priority_model()
-        self.next_hop_probabilities_graph = self.next_hop_probabilities_graph()
+        self.next_hop_policy_graph = self._build_next_hop_policy_graph()
+
+        # self.next_hop_priority_model = self._build_next_hop_priority_model()
+        # self.next_hop_probabilities_graph = self.next_hop_probabilities_graph()
 
         self.session.run(tf.global_variables_initializer())
         self.default_graph = tf.get_default_graph()
@@ -133,191 +135,242 @@ class Brain:
 
         return model
 
-    def _build_next_hop_priority_model(self):
-        next_hop_feature = Input(shape=self.next_hop_feature_shape)
-        dense_layer_1 = Dense(16, activation='relu')(next_hop_feature)
-        out_priority = Dense(1, activation='linear')(dense_layer_1)
-        model = Model(inputs=[next_hop_feature], outputs=[out_priority])
-        model._make_predict_function()
-        return model
+    # def _build_next_hop_priority_model(self):
+    #     next_hop_feature = Input(shape=self.next_hop_feature_shape)
+    #     dense_layer_1 = Dense(16, activation='relu')(next_hop_feature)
+    #     out_priority = Dense(1, activation='linear')(dense_layer_1)
+    #     model = Model(inputs=[next_hop_feature], outputs=[out_priority])
+    #     model._make_predict_function()
+    #     return model
     
     def _build_next_hop_priority_graph(self):
         with tf.Graph().as_default() as next_hop_priority_graph:
-            next_hop_feature = tf.placeholder(tf.float32, shape=self.next_hop_feature_shape, name="feature")
+            next_hop_feature = tf.placeholder(tf.float32, shape=tuple(self.next_hop_feature_shape), name="feature")
             dense_layer_1 = tf.layers.dense(next_hop_feature, 16, activation=tf.nn.relu)
             out_priority = tf.layers.dense(dense_layer_1, 1, name="priority") # linear activation
         return next_hop_priority_graph.as_graph_def()
 
-    def _build_next_hop_probabilities_graph(self):
-        with tf.Graph().as_default() as next_hop_probabilities_graph:
-            all_next_hop_features = tf.placeholder(tf.float32, shape=(None, self.next_hop_feature_shape))
-            dense_layer_2 = tf.layers.flatten(all_next_hop_features)
-            reward = tf.layers.dense(dense_layer_2, 1, name="reward")
-            priorities = tf.map_fn(lambda x: tf.import_graph_def(self.next_hop_priority_graph, input_map={"feature:0": x}, return_elements=["priority:0"]), all_next_hop_features)
-            probabilities = tf.nn.softmax(priorities)
-            actual_probabilities = tf.placeholder(tf.float32, shape=(None,))
-            log_prob = tf.log(tf.reduce_sum(probabilities*actual_probabilities) + 1e-10)
-            advantage = None
-        return next_hop_probabilities_graph.as_graph_def()
-
-
-    def _build_graph(self, model):
-        # s_t = tf.placeholder(tf.float32, shape=(None, int(STATE[0])*int(STATE[1])))
-        # a_t = tf.placeholder(tf.float32, shape=(None, int(ACTION.high[0])*int(ACTION.high[1])))
-        # r_t = tf.placeholder(tf.float32, shape=(None, 1)) # not immediate, but discounted n step reward
+    def _build_next_hop_policy_graph(self):
+        # with tf.Graph().as_default() as next_hop_probabilities_graph:
+        actual_next_hop_features = tf.placeholder(tf.float32, shape=tuple([None].append(self.next_hop_feature_shape)))
+        actual_probabilities = tf.placeholder(tf.float32, shape=(None,None))
+        actual_rewards = tf.placeholder(tf.float32, shape=(None,1))
         
-        # prob, avg_value = model(s_t)
-
-        if TOPO:
-            topo_t = tf.placeholder(tf.float32, shape=(None, self.topology_shape[0], self.topology_shape[1]))
-        routes_t = tf.placeholder(tf.float32, shape=(None, self.routes_shape[0], self.routes_shape[1]))
-        reach_t = tf.placeholder(tf.float32, shape=(None, self.reachability_shape[0], self.reachability_shape[1]))
-
-        action_t = tf.placeholder(tf.float32, shape=(None, self.action_shape_height, self.action_shape_width))
-        reward_t = tf.placeholder(tf.float32, shape=(None, 1))
-
-        if TOPO:
-            prob, avg_reward = model([topo_t, routes_t, reach_t])
-        else:
-            prob, avg_reward = model([routes_t, reach_t])
-
-        log_prob = tf.log(tf.reduce_sum(prob * action_t, axis=1, keepdims=True) + 1e-10)
-        advantage = reward_t - avg_reward
-
-        loss_policy = - log_prob * tf.stop_gradient(advantage)									# maximize policy
-        loss_value  = LOSS_V * tf.square(advantage)												# minimize value error
-        entropy = LOSS_ENTROPY * tf.reduce_sum(prob * tf.log(prob + 1e-10), axis=1, keepdims=True)	# maximize entropy (regularization)
-
-        # op_names = [str(op.name) for op in tf.get_default_graph().get_operations()]
-
-        # print(*(str((type(op), op.name, op)) for op in tf.get_default_graph().get_operations()), sep='\n')
-        # print_op = tf.Print(action_t,  tf.get_default_graph().get_operations())
+        dense_layer_2 = tf.layers.flatten(actual_next_hop_features)
+        avg_rewards = tf.layers.dense(dense_layer_2, 1, name="reward") # linear activation
+        priorities = tf.map_fn(lambda x: tf.import_graph_def(self.next_hop_priority_graph, input_map={"feature:0": x}, return_elements=["priority:0"]), actual_next_hop_features)
+        next_hop_probabilities = tf.nn.softmax(priorities)
         
-        # print_op = tf.Print(action_t,  [reward_t])
-        # with tf.control_dependencies([print_op]):
-        # 	loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
-        
+        log_prob = tf.log(tf.reduce_sum(next_hop_probabilities * actual_probabilities) + 1e-10)
+        advantage = actual_rewards - avg_rewards
+
+        loss_policy = - log_prob * tf.stop_gradient(advantage)                                                       # maximize policy
+        loss_value = LOSS_V * tf.square(advantage)                                                                   # minimize value error
+        entropy = LOSS_ENTROPY * tf.reduce_sum(next_hop_probabilities * tf.log(next_hop_probabilities + 1e-10), axis=1, keepdims=True) # maximize entropy (regularization)
         loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
-
         optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
-        # optimizer = tf.train.AdamOptimizer()
         minimize = optimizer.minimize(loss_total)
 
-        if TOPO:
-            return topo_t, routes_t, reach_t, action_t, reward_t, minimize
-        else:
-            return routes_t, reach_t, action_t, reward_t, minimize
+        return actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities, avg_rewards
 
-    # def get_weights(self):
-    # 	tvars = tf.trainable_variables()
-    # 	print(tvars)
-    # 	tvars_vals = self.session.run(tvars)
-    # 	for var, val in zip(tvars, tvars_vals):
-    # 		print(var.name, val)
-      # 	# return [v for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES) if v.name.endswith('weights:0')]
+    # def _build_graph(self, model):
+    #     # s_t = tf.placeholder(tf.float32, shape=(None, int(STATE[0])*int(STATE[1])))
+    #     # a_t = tf.placeholder(tf.float32, shape=(None, int(ACTION.high[0])*int(ACTION.high[1])))
+    #     # r_t = tf.placeholder(tf.float32, shape=(None, 1)) # not immediate, but discounted n step reward
+        
+    #     # prob, avg_value = model(s_t)
+
+    #     if TOPO:
+    #         topo_t = tf.placeholder(tf.float32, shape=(None, self.topology_shape[0], self.topology_shape[1]))
+    #     routes_t = tf.placeholder(tf.float32, shape=(None, self.routes_shape[0], self.routes_shape[1]))
+    #     reach_t = tf.placeholder(tf.float32, shape=(None, self.reachability_shape[0], self.reachability_shape[1]))
+
+    #     action_t = tf.placeholder(tf.float32, shape=(None, self.action_shape_height, self.action_shape_width))
+    #     reward_t = tf.placeholder(tf.float32, shape=(None, 1))
+
+    #     if TOPO:
+    #         prob, avg_reward = model([topo_t, routes_t, reach_t])
+    #     else:
+    #         prob, avg_reward = model([routes_t, reach_t])
+
+    #     log_prob = tf.log(tf.reduce_sum(prob * action_t, axis=1, keepdims=True) + 1e-10)
+    #     advantage = reward_t - avg_reward
+
+    #     loss_policy = - log_prob * tf.stop_gradient(advantage)									# maximize policy
+    #     loss_value  = LOSS_V * tf.square(advantage)												# minimize value error
+    #     entropy = LOSS_ENTROPY * tf.reduce_sum(prob * tf.log(prob + 1e-10), axis=1, keepdims=True)	# maximize entropy (regularization)
+
+    #     # op_names = [str(op.name) for op in tf.get_default_graph().get_operations()]
+
+    #     # print(*(str((type(op), op.name, op)) for op in tf.get_default_graph().get_operations()), sep='\n')
+    #     # print_op = tf.Print(action_t,  tf.get_default_graph().get_operations())
+        
+    #     # print_op = tf.Print(action_t,  [reward_t])
+    #     # with tf.control_dependencies([print_op]):
+    #     # 	loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
+        
+    #     loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
+
+    #     optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
+    #     # optimizer = tf.train.AdamOptimizer()
+    #     minimize = optimizer.minimize(loss_total)
+
+    #     if TOPO:
+    #         return topo_t, routes_t, reach_t, action_t, reward_t, minimize
+    #     else:
+    #         return routes_t, reach_t, action_t, reward_t, minimize
 
     def optimize(self):
-        if len(self.train_queue[0][0]) < MIN_BATCH:
-            time.sleep(0)	# yield
+        if len(self.train_queue[0]) < MIN_BATCH:
+            time.sleep(0)
             return
-
+        
         with self.lock_queue:
-            if len(self.train_queue[0][0]) < MIN_BATCH:	# more thread could have passed without lock
-                return 									# we can't yield inside lock
-
-            state, action, reward, state_, state_mask = self.train_queue
-            self.train_queue = [ [[], [], []], [], [], [[], [], []], [] ]
+            if len(self.train_queue[0]) < MIN_BATCH:
+                return
+            
+            states, actions, rewards, states_, state_masks = self.train_queue
+            self.train_queue = [ [], [], [], [], [] ]
         
         self.train_iteration = self.train_iteration + 1
 
-        if TOPO:
-            state_topo = np.vstack(state[0])
-            state_routes = np.vstack(state[1])
-            state_reach = np.vstack(state[2])
-            action = np.vstack(action)
-            reward = np.vstack(reward)
-            state_topo_ = np.vstack(state_[0])
-            state_routes_ = np.vstack(state_[1])
-            state_reach_ = np.vstack(state_[2])
-            state_mask = np.vstack(state_mask)
-        else:
-            state_routes = np.vstack(state[0])
-            state_reach = np.vstack(state[1])
-            action = np.vstack(action)
-            reward = np.vstack(reward)
-            state_routes_ = np.vstack(state_[0])
-            state_reach_ = np.vstack(state_[1])
-            state_mask = np.vstack(state_mask)
+        next_hop_features = np.vstack(states)
+        actions = np.vstack(actions)
+        rewards = np.vstack(rewards)
+        next_hop_features_ = np.vstack(states_)
 
-        if len(state_routes) > 5*MIN_BATCH: 
-            print("Optimizer alert! Minimizing batch of %d" % len(state_routes))
-
-        if TOPO:
-            avg_reward = self.predict_avg_reward([state_topo_, state_routes_, state_reach_])
-        else:
-            avg_reward = self.predict_avg_reward([state_routes_, state_reach_])
+        if len(next_hop_features) > 5*MIN_BATCH:
+            print("Optimizer alert! Minimizing batch of %d" % len(next_hop_features))
         
-        reward = reward + self.gamma_n * avg_reward * state_mask	# set avg_reward to 0 where state_ is terminal state
-        # print "state_mask: %s" % str(state_mask)
-        # print "reward value: %s" % str(reward)
-        
-        if TOPO:
-            topo_t, routes_t, reach_t, action_t, reward_t, minimize = self.graph
-        else:
-            routes_t, reach_t, action_t, reward_t, minimize = self.graph
+        actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate = self.next_hop_policy_graph
 
-        # np.save('prev_train_%d' % self.train_iteration, [l.get_weights() for l in self.model.layers])
-        if TOPO:
-            self.session.run(minimize, feed_dict={topo_t: state_topo, routes_t: state_routes, reach_t: state_reach, action_t: action, reward_t: reward})
-        else:
-            self.session.run(minimize, feed_dict={routes_t: state_routes, reach_t: state_reach, action_t: action, reward_t: reward})
-        # np.save('after_train_%d' % self.train_iteration, [l.get_weights() for l in self.model.layers])
-        # self.get_weights()
+        avg_rewards = self.session.run(avg_rewards_estimate, feed_dict={avg_rewards_estimate})
+        rewards = rewards + self.gamma_n * avg_rewards * state_masks
+
+        self.session.run(minimize, feed_dict={actual_next_hop_features: next_hop_features, actual_probabilities: actions, actual_rewards: rewards})
+
+    # def optimize(self):
+    #     if len(self.train_queue[0][0]) < MIN_BATCH:
+    #         time.sleep(0)	# yield
+    #         return
+
+    #     with self.lock_queue:
+    #         if len(self.train_queue[0][0]) < MIN_BATCH:	# more thread could have passed without lock
+    #             return 									# we can't yield inside lock
+
+    #         state, action, reward, state_, state_mask = self.train_queue
+    #         self.train_queue = [ [[], [], []], [], [], [[], [], []], [] ]
+        
+    #     self.train_iteration = self.train_iteration + 1
+
+    #     if TOPO:
+    #         state_topo = np.vstack(state[0])
+    #         state_routes = np.vstack(state[1])
+    #         state_reach = np.vstack(state[2])
+    #         action = np.vstack(action)
+    #         reward = np.vstack(reward)
+    #         state_topo_ = np.vstack(state_[0])
+    #         state_routes_ = np.vstack(state_[1])
+    #         state_reach_ = np.vstack(state_[2])
+    #         state_mask = np.vstack(state_mask)
+    #     else:
+    #         state_routes = np.vstack(state[0])
+    #         state_reach = np.vstack(state[1])
+    #         action = np.vstack(action)
+    #         reward = np.vstack(reward)
+    #         state_routes_ = np.vstack(state_[0])
+    #         state_reach_ = np.vstack(state_[1])
+    #         state_mask = np.vstack(state_mask)
+
+    #     if len(state_routes) > 5*MIN_BATCH: 
+    #         print("Optimizer alert! Minimizing batch of %d" % len(state_routes))
+
+    #     if TOPO:
+    #         avg_reward = self.predict_avg_reward([state_topo_, state_routes_, state_reach_])
+    #     else:
+    #         avg_reward = self.predict_avg_reward([state_routes_, state_reach_])
+        
+    #     reward = reward + self.gamma_n * avg_reward * state_mask	# set avg_reward to 0 where state_ is terminal state
+    #     # print "state_mask: %s" % str(state_mask)
+    #     # print "reward value: %s" % str(reward)
+        
+    #     if TOPO:
+    #         topo_t, routes_t, reach_t, action_t, reward_t, minimize = self.graph
+    #     else:
+    #         routes_t, reach_t, action_t, reward_t, minimize = self.graph
+
+    #     # np.save('prev_train_%d' % self.train_iteration, [l.get_weights() for l in self.model.layers])
+    #     if TOPO:
+    #         self.session.run(minimize, feed_dict={topo_t: state_topo, routes_t: state_routes, reach_t: state_reach, action_t: action, reward_t: reward})
+    #     else:
+    #         self.session.run(minimize, feed_dict={routes_t: state_routes, reach_t: state_reach, action_t: action, reward_t: reward})
+    #     # np.save('after_train_%d' % self.train_iteration, [l.get_weights() for l in self.model.layers])
+    #     # self.get_weights()
 
     def train_push(self, state, action, reward, state_):
         if DEBUG:
-            print("Training Datum: Routes: %s, Action: %s, Reward: %s" % (str(state["routes"]), str(action), str(reward)))
+            print("Training Datum: Actual Next Hops: %s, Action: %s, Reward: %s" % (str(state), str(action), str(reward)))
 
         with self.lock_queue:
-            # print "routes shape: %s" % str(state["routes"].shape)
-            if TOPO:
-                self.train_queue[0][0].append([state["topology"]])
-                self.train_queue[0][1].append([state["routes"]])
-                self.train_queue[0][2].append([state["reachability"]])
-                self.train_queue[1].append([action])
-                self.train_queue[2].append([reward])
-            else:
-                self.train_queue[0][0].append([state["routes"]])
-                self.train_queue[0][1].append([state["reachability"]])
-                self.train_queue[1].append([action])
-                self.train_queue[2].append([reward])
+            # print "routes shape: %s" % str(state.shape)
+            self.train_queue[0].append([state])
+            self.train_queue[1].append([action])
+            self.train_queue[2].append([reward])
 
             if state_ is None:
-                # print "STATE IS NONE"
-                if TOPO:
-                    self.train_queue[3][0].append([NULL_STATE["topology"]])
-                    self.train_queue[3][1].append([NULL_STATE["routes"]])
-                    self.train_queue[3][2].append([NULL_STATE["reachability"]])
-                    self.train_queue[4].append([0.])
-                else:
-                    self.train_queue[3][0].append([NULL_STATE["routes"]])
-                    self.train_queue[3][1].append([NULL_STATE["reachability"]])
-                    self.train_queue[4].append([0.])
+                self.train_queue[3].append([state_])
+                self.train_queue[4].append([0.])
             else:
-                if TOPO:
-                    self.train_queue[3][0].append([state_["topology"]])
-                    self.train_queue[3][1].append([state_["routes"]])
-                    self.train_queue[3][2].append([state_["reachability"]])
-                    self.train_queue[4].append([1.])
-                else:
-                    self.train_queue[3][0].append([state_["routes"]])
-                    self.train_queue[3][1].append([state_["reachability"]])
-                    self.train_queue[4].append([1.])
+                self.train_queue[3].append([state_])
+                self.train_queue[4].append([1.])
+
+    # def train_push(self, state, action, reward, state_):
+    #     if DEBUG:
+    #         print("Training Datum: Routes: %s, Action: %s, Reward: %s" % (str(state["routes"]), str(action), str(reward)))
+
+    #     with self.lock_queue:
+    #         # print "routes shape: %s" % str(state["routes"].shape)
+    #         if TOPO:
+    #             self.train_queue[0][0].append([state["topology"]])
+    #             self.train_queue[0][1].append([state["routes"]])
+    #             self.train_queue[0][2].append([state["reachability"]])
+    #             self.train_queue[1].append([action])
+    #             self.train_queue[2].append([reward])
+    #         else:
+    #             self.train_queue[0][0].append([state["routes"]])
+    #             self.train_queue[0][1].append([state["reachability"]])
+    #             self.train_queue[1].append([action])
+    #             self.train_queue[2].append([reward])
+
+    #         if state_ is None:
+    #             # print "STATE IS NONE"
+    #             if TOPO:
+    #                 self.train_queue[3][0].append([NULL_STATE["topology"]])
+    #                 self.train_queue[3][1].append([NULL_STATE["routes"]])
+    #                 self.train_queue[3][2].append([NULL_STATE["reachability"]])
+    #                 self.train_queue[4].append([0.])
+    #             else:
+    #                 self.train_queue[3][0].append([NULL_STATE["routes"]])
+    #                 self.train_queue[3][1].append([NULL_STATE["reachability"]])
+    #                 self.train_queue[4].append([0.])
+    #         else:
+    #             if TOPO:
+    #                 self.train_queue[3][0].append([state_["topology"]])
+    #                 self.train_queue[3][1].append([state_["routes"]])
+    #                 self.train_queue[3][2].append([state_["reachability"]])
+    #                 self.train_queue[4].append([1.])
+    #             else:
+    #                 self.train_queue[3][0].append([state_["routes"]])
+    #                 self.train_queue[3][1].append([state_["reachability"]])
+    #                 self.train_queue[4].append([1.])
 
     def predict(self, state):
         with self.default_graph.as_default():
-            prob, avg_reward = self.model.predict(state)
-            return prob, avg_reward
+            # probabilities, avg_reward = self.model.predict(state)
+            actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate = self.next_hop_policy_graph
+            probabilities = self.session.run(next_hop_probabilities_estimate, feed_dict={actual_next_hop_features: state})
+            avg_reward = self.session.run(avg_rewards_estimate, feed_dict={actual_next_hop_features: state})
+            return probabilities, avg_reward
 
     def predict_prob(self, state):
         with self.default_graph.as_default():
@@ -325,13 +378,17 @@ class Brain:
             # print state[1].shape
             # print state[2].shape
             # np.save('predict_prob_%d' % self.train_iteration, [l.get_weights() for l in self.model.layers])
-            prob, avg_reward = self.model.predict(state)
-            return prob
+            # probabilities, avg_reward = self.model.predict(state)
+            actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate = self.next_hop_policy_graph
+            probabilities = self.session.run(next_hop_probabilities_estimate, feed_dict={actual_next_hop_features: state})
+            return probabilities
 
     def predict_avg_reward(self, state):
         with self.default_graph.as_default():
             # np.save('predict_avg_reward_%d' % self.train_iteration, [l.get_weights() for l in self.model.layers])
-            prob, avg_reward = self.model.predict(state)
+            # prob, avg_reward = self.model.predict(state)
+            actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate = self.next_hop_policy_graph
+            avg_reward = self.session.run(avg_rewards_estimate, feed_dict={actual_next_hop_features: state})
             return avg_reward
 
 #---------
@@ -353,14 +410,15 @@ class Agent:
         self.action_shape_width = int(self.env.action_space.high[1])
 
     def getEpsilon(self):
+        eps_ret = 0.0
         frames = FRAMES.next()
         if frames >= self.eps_steps:
-            if frames == self.eps_steps:
-                if VERBOSE and not TESTING:
-                    print("Switching to Pure Exploit")
-            return self.eps_end
+            eps_ret = self.eps_end
         else:
-            return self.eps_start + frames * (self.eps_end - self.eps_start) / self.eps_steps	# linearly interpolate
+            eps_ret = self.eps_start + frames * (self.eps_end - self.eps_start) / self.eps_steps	# linearly interpolate
+        
+        if VERBOSE and not TESTING and eps_ret == 0.0:
+            print("Switching to Pure Exploit")
 
     def act(self, state):
         eps = self.getEpsilon()			
@@ -556,7 +614,7 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
     global vectors
     adj_matrix = _env.state["topology"]
     vectors = deepwalk.get_deepwalk_representation(adj_matrix)
-    return
+    # return
 
     brain = Brain(gamma=gamma, n_step_return=n_step_return, 
                 learning_rate=learning_rate, min_batch=min_batch, 
