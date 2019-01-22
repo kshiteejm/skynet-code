@@ -39,14 +39,14 @@ LEARNING_RATE = 5e-2
 LOSS_V = .5			# v loss coefficient
 LOSS_ENTROPY = .01 	# entropy coefficient
 
+PER_INSTANCE_LIMIT = 100
+
 MODEL_VERSION = 1	# state-dependent
 
 TOPO = True
 
 DEBUG = False
 VERBOSE = True
-PER_INSTANCE_LIMIT = 100
-
 
 #---------
 class Brain:
@@ -165,10 +165,10 @@ class Brain:
         advantage = actual_rewards - avg_rewards
 
         loss_policy = - log_prob * tf.stop_gradient(advantage)                                                       # maximize policy
-        loss_value = LOSS_V * tf.square(advantage)                                                                   # minimize value error
-        entropy = LOSS_ENTROPY * tf.reduce_sum(next_hop_probabilities * tf.log(next_hop_probabilities + 1e-10), axis=1, keepdims=True) # maximize entropy (regularization)
+        loss_value = self.loss_v * tf.square(advantage)                                                                   # minimize value error
+        entropy = self.loss_entropy * tf.reduce_sum(next_hop_probabilities * tf.log(next_hop_probabilities + 1e-10), axis=1, keepdims=True) # maximize entropy (regularization)
         loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
-        optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
+        optimizer = tf.train.RMSPropOptimizer(self.learning_rate, decay=.99)
         minimize = optimizer.minimize(loss_total)
 
         return actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities, avg_rewards
@@ -197,8 +197,8 @@ class Brain:
     #     advantage = reward_t - avg_reward
 
     #     loss_policy = - log_prob * tf.stop_gradient(advantage)									# maximize policy
-    #     loss_value  = LOSS_V * tf.square(advantage)												# minimize value error
-    #     entropy = LOSS_ENTROPY * tf.reduce_sum(prob * tf.log(prob + 1e-10), axis=1, keepdims=True)	# maximize entropy (regularization)
+    #     loss_value  = self.loss_v * tf.square(advantage)												# minimize value error
+    #     entropy = self.loss_entropy * tf.reduce_sum(prob * tf.log(prob + 1e-10), axis=1, keepdims=True)	# maximize entropy (regularization)
 
     #     # op_names = [str(op.name) for op in tf.get_default_graph().get_operations()]
 
@@ -211,7 +211,7 @@ class Brain:
         
     #     loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
 
-    #     optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
+    #     optimizer = tf.train.RMSPropOptimizer(self.learning_rate, decay=.99)
     #     # optimizer = tf.train.AdamOptimizer()
     #     minimize = optimizer.minimize(loss_total)
 
@@ -221,12 +221,12 @@ class Brain:
     #         return routes_t, reach_t, action_t, reward_t, minimize
 
     def optimize(self):
-        if len(self.train_queue[0]) < MIN_BATCH:
+        if len(self.train_queue[0]) < self.min_batch:
             time.sleep(0)
             return
         
         with self.lock_queue:
-            if len(self.train_queue[0]) < MIN_BATCH:
+            if len(self.train_queue[0]) < self.min_batch:
                 return
             
             states, actions, rewards, states_, state_masks = self.train_queue
@@ -239,7 +239,7 @@ class Brain:
         rewards = np.vstack(rewards)
         next_hop_features_ = np.vstack(states_)
 
-        if len(next_hop_features) > 5*MIN_BATCH:
+        if len(next_hop_features) > 5*self.min_batch:
             print("Optimizer alert! Minimizing batch of %d" % len(next_hop_features))
         
         actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate = self.next_hop_policy_graph
@@ -250,12 +250,12 @@ class Brain:
         self.session.run(minimize, feed_dict={actual_next_hop_features: next_hop_features, actual_probabilities: actions, actual_rewards: rewards})
 
     # def optimize(self):
-    #     if len(self.train_queue[0][0]) < MIN_BATCH:
+    #     if len(self.train_queue[0][0]) < self.min_batch:
     #         time.sleep(0)	# yield
     #         return
 
     #     with self.lock_queue:
-    #         if len(self.train_queue[0][0]) < MIN_BATCH:	# more thread could have passed without lock
+    #         if len(self.train_queue[0][0]) < self.min_batch:	# more thread could have passed without lock
     #             return 									# we can't yield inside lock
 
     #         state, action, reward, state_, state_mask = self.train_queue
@@ -282,7 +282,7 @@ class Brain:
     #         state_reach_ = np.vstack(state_[1])
     #         state_mask = np.vstack(state_mask)
 
-    #     if len(state_routes) > 5*MIN_BATCH: 
+    #     if len(state_routes) > 5*self.min_batch: 
     #         print("Optimizer alert! Minimizing batch of %d" % len(state_routes))
 
     #     if TOPO:
