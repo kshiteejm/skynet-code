@@ -112,10 +112,11 @@ class SkynetEnv(gym.Env):
             reachability[flow_id-1][src_switch_id-1] = 1
             reachability[flow_id-1][dst_switch_id-1] = 1
         # update next_hop_features, next_hop_details
-        next_hop_features, next_hop_details = self.get_next_hop_features()
-        self.next_hop_features = next_hop_features
-        self.state["next_hop_features"] = next_hop_features
-        self.next_hop_details = next_hop_details
+        if self.node_features is not None:
+            next_hop_features, next_hop_details = self.get_next_hop_features()
+            self.next_hop_features = next_hop_features
+            self.state["next_hop_features"] = next_hop_features
+            self.next_hop_details = next_hop_details
     
     def get_null_state(self):
         topology = self.state["topology"]
