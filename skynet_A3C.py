@@ -146,8 +146,8 @@ class Brain:
     def _build_next_hop_priority_graph(self):
         with tf.Graph().as_default() as next_hop_priority_graph:
             next_hop_feature = tf.placeholder(tf.float32, shape=tuple(self.next_hop_feature_shape), name="feature")
-            dense_layer_1 = tf.layers.dense(next_hop_feature, 16, activation=tf.nn.relu)
-            out_priority = tf.layers.dense(dense_layer_1, 1, name="priority") # linear activation
+            dense_layer = tf.layers.dense(next_hop_feature, 16, activation=tf.nn.relu)
+            out_priority = tf.layers.dense(dense_layer, 1, name="priority") # linear activation
         return next_hop_priority_graph.as_graph_def()
 
     def _build_next_hop_policy_graph(self):
@@ -156,8 +156,9 @@ class Brain:
         actual_probabilities = tf.placeholder(tf.float32, shape=(None,None))
         actual_rewards = tf.placeholder(tf.float32, shape=(None,1))
         
-        dense_layer_2 = tf.layers.flatten(actual_next_hop_features)
-        avg_rewards = tf.layers.dense(dense_layer_2, 1, name="reward") # linear activation
+        avg_next_hop_features = tf.metrics.mean_tensor(actual_next_hop_features)
+        dense_layer = tf.layers.dense(avg_next_hop_features, 16, activation=tf.nn.relu)
+        avg_rewards = tf.layers.dense(dense_layer, 1, name="reward") # linear activation
         priorities = tf.map_fn(lambda x: tf.import_graph_def(self.next_hop_priority_graph, input_map={"feature:0": x}, return_elements=["priority:0"]), actual_next_hop_features)
         next_hop_probabilities = tf.nn.softmax(priorities)
         
