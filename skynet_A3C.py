@@ -425,18 +425,31 @@ class Agent:
         FRAMES.next()
 
         if random.random() < eps and not TESTING:
-            action = self.env.get_random_action()
+            action = self.env.get_random_next_hop()
             return action, True
         else:
-            topo = np.array([state["topology"]])
-            routes = np.array([state["routes"]])
-            reach = np.array([state["reachability"]])
-            if TOPO:
-                prob = brain.predict_prob([topo, routes, reach])[0]
-            else:
-                prob = brain.predict_prob([routes, reach])[0]
-            action = self.env.get_random_action(p=prob)
+            next_hop_features = np.array([state["next_hop_features"]])
+            probabilities = brain.predict_prob([next_hop_features])[0]
+            action = self.env.get_random_next_hop(p=probabilities)
             return action, False
+    
+    # def act(self, state):
+    #     eps = self.getEpsilon()			
+    #     FRAMES.next()
+
+    #     if random.random() < eps and not TESTING:
+    #         action = self.env.get_random_action()
+    #         return action, True
+    #     else:
+    #         topo = np.array([state["topology"]])
+    #         routes = np.array([state["routes"]])
+    #         reach = np.array([state["reachability"]])
+    #         if TOPO:
+    #             prob = brain.predict_prob([topo, routes, reach])[0]
+    #         else:
+    #             prob = brain.predict_prob([routes, reach])[0]
+    #         action = self.env.get_random_action(p=prob)
+    #         return action, False
     
     def train(self, state, action, reward, state_):
         def get_sample(memory, n):
@@ -445,10 +458,9 @@ class Agent:
 
             return state, action, self.R, state_
 
-        flow_id = action[0]
-        switch_id = action[1]
-        action_one_hot_encoded = np.zeros((self.action_shape_height, self.action_shape_width))
-        action_one_hot_encoded[flow_id - 1][switch_id - 1] = 1
+        next_hop, next_hop_len, next_hop_index = action
+        action_one_hot_encoded = np.zeros(next_hop_len)
+        action_one_hot_encoded[next_hop_index] = 1
 
         self.memory.append( (state, action_one_hot_encoded, reward, state_) )
 
@@ -471,8 +483,42 @@ class Agent:
 
             self.R = self.R - self.memory[0][2]
             self.memory.pop(0)	
+            
+    # def train(self, state, action, reward, state_):
+    #     def get_sample(memory, n):
+    #         state, action, _, _  = memory[0]
+    #         _, _, _, state_ = memory[n-1]
+
+    #         return state, action, self.R, state_
+
+    #     flow_id = action[0]
+    #     switch_id = action[1]
+    #     action_one_hot_encoded = np.zeros((self.action_shape_height, self.action_shape_width))
+    #     action_one_hot_encoded[flow_id - 1][switch_id - 1] = 1
+
+    #     self.memory.append( (state, action_one_hot_encoded, reward, state_) )
+
+    #     self.R = ( self.R + reward * self.gamma_n ) / self.gamma
+
+    #     if state_ is None:
+    #         while len(self.memory) > 0:
+    #             n = len(self.memory)
+    #             state, action, reward, state_ = get_sample(self.memory, n)
+    #             brain.train_push(state, action, reward, state_)
+
+    #             self.R = ( self.R - self.memory[0][2] ) / self.gamma
+    #             self.memory.pop(0)
+
+    #         self.R = 0
+
+    #     if len(self.memory) >= self.n_step_return:
+    #         state, action, reward, state_ = get_sample(self.memory, self.n_step_return)
+    #         brain.train_push(state, action, reward, state_)
+
+    #         self.R = self.R - self.memory[0][2]
+    #         self.memory.pop(0)	
     
-    # possible edge case - if an episode ends in <N steps, the computation is incorrect
+    # # possible edge case - if an episode ends in <N steps, the computation is incorrect
         
 #---------
 class Environment(threading.Thread):
@@ -488,15 +534,17 @@ class Environment(threading.Thread):
         self.eps_steps = eps_steps
         self.per_instance_limit = per_instance_limit
         self.node_features = node_features
+        self.stop_signal = False
 
         self.reset()
     
     def reset(self, render=False, eps_start=None, eps_end=None, eps_steps=None):
-
-        if eps_start is None: eps_start = self.eps_start
-        if eps_end is None: eps_end = self.eps_end
-        if eps_steps is None: eps_steps = self.eps_steps
-
+        if eps_start is None: 
+            eps_start = self.eps_start
+        if eps_end is None: 
+            eps_end = self.eps_end
+        if eps_steps is None: 
+            eps_steps = self.eps_steps
 
         self.stop_signal = False
         self.render = render
@@ -511,7 +559,7 @@ class Environment(threading.Thread):
         if DEBUG:
             print("INSTANCE NUMBER: %d" % self.unique_id)
 
-    def runEpisode(self, hard_reset = False):
+    def runEpisode(self):
         state = self.env.reset()
         if DEBUG:
             print("Flow Details: %s" % str(self.env.flow_details))

@@ -363,8 +363,8 @@ class SkynetEnv(gym.Env):
         return (random_flow_id, random_switch_id)
 
     def get_random_next_hop(self, p=None):
-        random_next_hop = np.random.choice(self.next_hop_details, p=p)
-        return random_next_hop
+        random_next_hop_index = np.random.choice(range(0, len(self.next_hop_details)), p=p)
+        return self.next_hop_details[random_next_hop_index], len(self.next_hop_details), random_next_hop_index
 
     # # get a next hop link for an incomplete flow adhering to a particular probability distribution
     # def get_random_action(self, p=None):
