@@ -89,8 +89,9 @@ class Brain:
         # self.next_hop_priority_model = self._build_next_hop_priority_model()
         # self.next_hop_probabilities_graph = self.next_hop_probabilities_graph()
 
-        self.session.run(tf.global_variables_initializer())
-        self.default_graph = tf.get_default_graph()
+        # Teja's Comments
+        # self.session.run(tf.global_variables_initializer())
+        # self.default_graph = tf.get_default_graph()
 
         # self.default_graph.finalize()	# avoid modifications
 
@@ -166,14 +167,14 @@ class Brain:
         avg_next_hop_features = tf.reduce_mean(actual_next_hop_features, axis=1)
         dense_layer = tf.layers.dense(avg_next_hop_features, 16, activation=tf.nn.relu)
         avg_rewards = tf.layers.dense(dense_layer, 1, name="reward") # linear activation
-        priorities = tf.map_fn(lambda x: tf.import_graph_def(self.next_hop_priority_graph, input_map={"feature:0": x}, return_elements=["priority:0"]), actual_next_hop_features)
+        priorities = tf.map_fn(lambda x: tf.import_graph_def(self.next_hop_priority_graph, input_map={"feature:0": x}, return_elements="priority/BiasAdd:0"), actual_next_hop_features, dtype=tf.float32)
         next_hop_probabilities = tf.nn.softmax(priorities)
         
         log_prob = tf.log(tf.reduce_sum(next_hop_probabilities * actual_probabilities) + 1e-10)
         advantage = actual_rewards - avg_rewards
 
-        loss_policy = - log_prob * tf.stop_gradient(advantage)                                                       # maximize policy
-        loss_value = self.loss_v * tf.square(advantage)                                                                   # minimize value error
+        loss_policy = - log_prob * tf.stop_gradient(advantage)  # maximize policy
+        loss_value = self.loss_v * tf.square(advantage)    # minimize value error
         entropy = self.loss_entropy * tf.reduce_sum(next_hop_probabilities * tf.log(next_hop_probabilities + 1e-10), axis=1, keepdims=True) # maximize entropy (regularization)
         loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
         optimizer = tf.train.RMSPropOptimizer(self.learning_rate, decay=.99)
@@ -429,7 +430,7 @@ class Agent:
             print("Switching to Pure Exploit")
 
     def act(self, state):
-        eps = self.getEpsilon()			
+        eps = self.getEpsilon()
         FRAMES.next()
 
         if random.random() < eps and not TESTING:
@@ -677,56 +678,57 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
                 learning_rate=learning_rate, min_batch=min_batch, 
                 loss_v=loss_v, loss_entropy=loss_entropy)   # brain is global in A3C
 
-    envs = [Environment(eps_start=eps_start, eps_end=eps_end, eps_steps=eps_steps, per_instance_limit=per_instance_limit, node_features=node_features) for i in range(THREADS)]
-    opts = [Optimizer() for i in range(OPTIMIZERS)]
+    #TEJA all the way
+    # envs = [Environment(eps_start=eps_start, eps_end=eps_end, eps_steps=eps_steps, per_instance_limit=per_instance_limit, node_features=node_features) for i in range(THREADS)]
+    # opts = [Optimizer() for i in range(OPTIMIZERS)]
 
-    for o in opts:
-        o.start()
+    # for o in opts:
+    #     o.start()
 
-    for e in envs:
-        e.start()
+    # for e in envs:
+    #     e.start()
 
-    for e in envs:
-        e.join()
+    # for e in envs:
+    #     e.join()
 
-    for o in opts:
-        o.stop()
-    for o in opts:
-        o.join()
+    # for o in opts:
+    #     o.stop()
+    # for o in opts:
+    #     o.join()
 
-    training_instances = 0
-    training_deviation = 0.0
-    for e in envs:
-        training_instances = training_instances + e.num_instances
-        training_deviation = training_deviation + e.deviation
-    avg_training_deviation = training_deviation/(training_instances*1.0)
+    # training_instances = 0
+    # training_deviation = 0.0
+    # for e in envs:
+    #     training_instances = training_instances + e.num_instances
+    #     training_deviation = training_deviation + e.deviation
+    # avg_training_deviation = training_deviation/(training_instances*1.0)
 
-    if VERBOSE:
-        print("TRAINING PHASE ENDED.")
+    # if VERBOSE:
+    #     print("TRAINING PHASE ENDED.")
 
-    TESTING = True
-    INSTANCE_NUM = itertools.count()
-    envs = [Environment() for i in range(THREADS)]
-    test_instances = 0
-    test_deviation = 0.0
-    for e in envs:
-        e.start()
-    for e in envs:
-        e.join()
-    for e in envs:
-        test_instances = test_instances + e.num_instances
-        test_deviation = test_deviation + e.deviation
+    # TESTING = True
+    # INSTANCE_NUM = itertools.count()
+    # envs = [Environment() for i in range(THREADS)]
+    # test_instances = 0
+    # test_deviation = 0.0
+    # for e in envs:
+    #     e.start()
+    # for e in envs:
+    #     e.join()
+    # for e in envs:
+    #     test_instances = test_instances + e.num_instances
+    #     test_deviation = test_deviation + e.deviation
 
-    avg_test_deviation = test_deviation/(test_instances*1.0)
-    if VERBOSE:
-        print("AVG TRAIN DEVIATION: %f" % avg_training_deviation)
-        print("AVG TEST DEVIATION: %f"  % avg_test_deviation)
+    # avg_test_deviation = test_deviation/(test_instances*1.0)
+    # if VERBOSE:
+    #     print("AVG TRAIN DEVIATION: %f" % avg_training_deviation)
+    #     print("AVG TEST DEVIATION: %f"  % avg_test_deviation)
 
-    brain.session.close()
-    tf.reset_default_graph()
-    del brain
+    # brain.session.close()
+    # tf.reset_default_graph()
+    # del brain
 
-    return avg_test_deviation
+    # return avg_test_deviation
 
 
 if __name__ == '__main__':
