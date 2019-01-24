@@ -21,7 +21,7 @@ import deepwalk
 ENV = 'Skynet-v0'
 
 RUN_TIME = 60
-THREADS = 8
+THREADS = 1
 OPTIMIZERS = 1
 THREAD_DELAY = 0.001
 
@@ -45,7 +45,7 @@ MODEL_VERSION = 1	# state-dependent
 
 TOPO = True
 
-DEBUG = False
+DEBUG = True
 VERBOSE = True
 
 #---------
@@ -78,7 +78,7 @@ class Brain:
         self.reachability_shape = OBSERVATION_SPACE.spaces["reachability"].shape
         self.action_shape_height = int(ACTION_SPACE.high[0])
         self.action_shape_width = int(ACTION_SPACE.high[1])
-        self.next_hop_feature_shape = list(node_features[0].shape)
+        self.next_hop_feature_shape = list([node_features[0].shape[0]*4])
 
         # self.model = self._build_model()
         # self.graph = self._build_graph(self.model)
@@ -437,7 +437,9 @@ class Agent:
             return action, True
         else:
             next_hop_features = np.array([state["next_hop_features"]])
-            probabilities = brain.predict_prob([next_hop_features])[0]
+            if DEBUG:
+                print("Next Hop Features: %s, %s" % (str(state["next_hop_features"]), str(state["next_hop_features"].shape)))
+            probabilities = brain.predict_prob(next_hop_features)[0]
             action = self.env.get_random_next_hop(p=probabilities)
             return action, False
     
@@ -581,7 +583,8 @@ class Environment(threading.Thread):
             action, is_rand = self.agent.act(state)
             state_, reward, done, info = self.env.step(action)
             if DEBUG:
-                print("Routes: %s" % str(state["routes"]))
+                # print("Routes: %s" % str(state["routes"]))
+                print("Next Hop Features: %s, %s" % (str(state["next_hop_features"]), str(state["next_hop_features"].shape)))
                 print("Action: %s, Random: %s" % (str(action), str(is_rand)))
                 print("Reward: %s" % str(reward))
 

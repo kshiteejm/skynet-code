@@ -318,7 +318,7 @@ class SkynetEnv(gym.Env):
                         if switch_id in group:
                             reachable_to_dst_next_switch_ids.append(switch_id)
             for switch_id in reachable_to_dst_next_switch_ids:
-                next_hop_features.append([node_features[switch_id-1], node_features[recent_switch_id-1], node_features[dst_switch_id-1], node_features[src_switch_id-1]])
+                next_hop_features.append(np.concatenate((node_features[switch_id-1], node_features[recent_switch_id-1], node_features[dst_switch_id-1], node_features[src_switch_id-1])))
                 next_hop_details.append((flow_id, switch_id))
         return np.array(next_hop_features), next_hop_details
 
