@@ -90,6 +90,7 @@ class Brain:
         # self.next_hop_probabilities_graph = self.next_hop_probabilities_graph()
 
         self.session.run(tf.global_variables_initializer())
+        # self.session.run(tf.local_variables_initializer())
         self.default_graph = tf.get_default_graph()
 
         # self.default_graph.finalize()	# avoid modifications
@@ -151,6 +152,9 @@ class Brain:
             # next_hop_feature = tf.placeholder(tf.float32, shape=[64], name="feature")
             dense_layer = tf.layers.dense(next_hop_feature, 16, activation=tf.nn.relu)
             out_priority = tf.layers.dense(dense_layer, 1, name="priority") # linear activation
+            # sess = tf.Session()
+            # sess.run(tf.global_variables_initializer())
+            # self.session.run(tf.global_variables_initializer())
         return next_hop_priority_graph.as_graph_def()
 
     def _build_next_hop_policy_graph(self):
