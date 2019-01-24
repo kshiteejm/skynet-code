@@ -6,6 +6,7 @@ import argparse
 
 import tensorflow as tf
 import gym
+import gym_skynet
 
 from deepwalk import get_deepwalk_representation
 
