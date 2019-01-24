@@ -143,6 +143,7 @@ class Brain:
     #     model = Model(inputs=[next_hop_feature], outputs=[out_priority])
     #     model._make_predict_function()
     #     return model
+
     
     def _build_next_hop_priority_graph(self):
         with tf.Graph().as_default() as next_hop_priority_graph:
@@ -152,10 +153,16 @@ class Brain:
             # next_hop_feature = tf.placeholder(tf.float32, shape=[64], name="feature")
             dense_layer = tf.layers.dense(next_hop_feature, 16, activation=tf.nn.relu)
             out_priority = tf.layers.dense(dense_layer, 1, name="priority") # linear activation
-            # sess = tf.Session()
-            # sess.run(tf.global_variables_initializer())
-            # self.session.run(tf.global_variables_initializer())
-        return next_hop_priority_graph.as_graph_def()
+            sess = tf.Session()
+            sess.run(tf.global_variables_initializer())
+        # return next_hop_priority_graph.as_graph_def()
+        return next_hop_priority_graph
+    
+    def _build_nhp_graph(self, inputs):
+        with tf.variable_scope("test") as scope: 
+            dense_layer = tf.layers.dense(inputs, 16, activation=tf.nn.relu)
+            out_priority = tf.layers.dense(dense_layer, 1, name="priority") # linear activation
+            return out_priority
 
     def _build_next_hop_policy_graph(self):
         # with tf.Graph().as_default() as next_hop_probabilities_graph:
@@ -170,7 +177,9 @@ class Brain:
         avg_next_hop_features = tf.reduce_mean(actual_next_hop_features, axis=1)
         dense_layer = tf.layers.dense(avg_next_hop_features, 16, activation=tf.nn.relu)
         avg_rewards = tf.layers.dense(dense_layer, 1, name="reward") # linear activation
-        priorities = tf.map_fn(lambda x: tf.squeeze(tf.import_graph_def(self.next_hop_priority_graph, input_map={"feature:0": x}, return_elements=["priority/BiasAdd:0"])), actual_next_hop_features, dtype=tf.float32)
+        # priorities = tf.map_fn(lambda x: tf.squeeze(tf.import_graph_def(self.next_hop_priority_graph, input_map={"feature:0": x}, return_elements=["priority/BiasAdd:0"])), actual_next_hop_features, dtype=tf.float32)
+        with tf.variable_scope("test", reuse=tf.AUTO_REUSE) as scope:
+            priorities = tf.map_fn(lambda x: self._build_nhp_graph(x), actual_next_hop_features)
         next_hop_probabilities = tf.nn.softmax(priorities)
         
         log_prob = tf.log(tf.reduce_sum(next_hop_probabilities * actual_probabilities) + 1e-10)
