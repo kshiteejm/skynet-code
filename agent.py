@@ -50,8 +50,10 @@ class Agent:
             return action, True
         else:
             next_hop_features = np.array([state["next_hop_features"]])
+            probabilities = self.brain.predict_prob(next_hop_features) 
             if self.debug:
                 print("Next Hop Features: %s, %s" % (str(state["next_hop_features"]), str(state["next_hop_features"].shape)))
+                print("Probabilities: %s, %s" % (str(probabilities), str(probabilities.shape))) 
             probabilities = self.brain.predict_prob(next_hop_features)[0]
             action = self.env.get_random_next_hop(p=probabilities)
             return action, False
