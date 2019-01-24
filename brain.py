@@ -108,7 +108,10 @@ class Brain:
         avg_rewards = tf.layers.dense(dense_layer, 1, name="reward") # linear activation
         with tf.variable_scope("test", reuse=tf.AUTO_REUSE) as scope:
             priorities = tf.map_fn(lambda x: self._build_nhp_graph(x), actual_next_hop_features)
-        next_hop_probabilities = tf.nn.softmax(priorities)
+            
+        print_op = tf.print(priorities)
+        with tf.control_dependencies([print_op]):
+            next_hop_probabilities = tf.nn.softmax(priorities) 
         
         log_prob = tf.log(tf.reduce_sum(next_hop_probabilities * actual_probabilities) + 1e-10)
         advantage = actual_rewards - avg_rewards
