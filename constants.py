@@ -37,9 +37,10 @@ TRAINING_INSTANCE_LIMIT = 10000
 TESTING_INSTANCE_LIMIT = 1000
 
 _env = gym.make(ENV)
-_env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree', deterministic=True)
+_env.__init__(topo_size=4, num_flows=1, topo_style=TOPOLOGY, deterministic=True)
 OBSERVATION_SPACE = _env.observation_space
 ACTION_SPACE = _env.action_space
 NULL_STATE = _env.get_null_state()
+ADJ_MAT = _env.state["topology"]
 
 del _env

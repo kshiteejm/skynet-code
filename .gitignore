@@ -7,3 +7,5 @@
 skynet-tune/
 *.DS_Store
 explore_skynet.txt
+
+skynet_venv/
