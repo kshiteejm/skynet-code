@@ -24,11 +24,17 @@ PER_INSTANCE_LIMIT = 100
 
 MODEL_VERSION = 1   # state-dependent
 
-TOPO = True
+TOPOLOGY = 'fat_tree'
+
+
+TOPO_FEAT = True
 
 DEBUG = True
 VERBOSE = True
 TESTING = True
+
+TRAINING_INSTANCE_LIMIT = 10000 
+TESTING_INSTANCE_LIMIT = 1000
 
 _env = gym.make(ENV)
 _env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree', deterministic=True)

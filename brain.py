@@ -8,7 +8,7 @@ from keras.layers import Input, Concatenate, Flatten, Dense, Reshape
 from keras.models import Model
 
 from constants import GAMMA, LEARNING_RATE, N_STEP_RETURN, MIN_BATCH, LOSS_V, LOSS_ENTROPY, \
-                    TOPO, OBSERVATION_SPACE, ACTION_SPACE, DEBUG
+                    TOPO_FEAT, OBSERVATION_SPACE, ACTION_SPACE, DEBUG
 
 class Brain:
     train_queue = [ [[], [], []], [], [], [[], [], []], [] ]    # s, a, r, s', s' terminal mask
@@ -16,7 +16,7 @@ class Brain:
 
     def __init__(self, node_features, gamma=GAMMA, n_step_return=N_STEP_RETURN, 
                 learning_rate=LEARNING_RATE, min_batch=MIN_BATCH, loss_v=LOSS_V, 
-                loss_entropy=LOSS_ENTROPY, topo=TOPO, debug=DEBUG):
+                loss_entropy=LOSS_ENTROPY, topo=TOPO_FEAT, debug=DEBUG):
         self.train_iteration = 0
 
         self.gamma = gamma
