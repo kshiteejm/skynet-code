@@ -1,23 +1,22 @@
 import time
-import itertools
-import random
+import threading
 
 import numpy as np
 import tensorflow as tf
 # from tensorflow.python import debug as tf_debug
+from keras.layers import Input, Concatenate, Flatten, Dense, Reshape
+from keras.models import Model
 
-import gym
-
-import gym_skynet
-import deepwalk
-from constants import *
+from constants import GAMMA, LEARNING_RATE, N_STEP_RETURN, MIN_BATCH, LOSS_V, LOSS_ENTROPY, \
+                    TOPO, OBSERVATION_SPACE, ACTION_SPACE, DEBUG
 
 class Brain:
     train_queue = [ [[], [], []], [], [], [[], [], []], [] ]    # s, a, r, s', s' terminal mask
     lock_queue = threading.Lock()
 
-    def __init__(self, gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE, min_batch=MIN_BATCH, 
-                loss_v=LOSS_V, loss_entropy=LOSS_ENTROPY):
+    def __init__(self, node_features, gamma=GAMMA, n_step_return=N_STEP_RETURN, 
+                learning_rate=LEARNING_RATE, min_batch=MIN_BATCH, loss_v=LOSS_V, 
+                loss_entropy=LOSS_ENTROPY, topo=TOPO, debug=DEBUG):
         self.train_iteration = 0
 
         self.gamma = gamma
@@ -29,6 +28,10 @@ class Brain:
 
         self.loss_v = loss_v
         self.loss_entropy = loss_entropy
+
+        self.topo = topo
+
+        self.debug = debug
 
         self.session = tf.Session()
 
@@ -46,12 +49,12 @@ class Brain:
         self.default_graph = tf.get_default_graph()
 
     def _build_model(self):
-        if TOPO:
+        if self.topo:
             topology_input = Input(shape=self.topology_shape)
         routes_input = Input(shape=self.routes_shape)
         reachability_input = Input(shape=self.reachability_shape)
 
-        if TOPO:
+        if self.topo:
             merged_input = Concatenate(axis=1)([topology_input, routes_input, reachability_input])
         else:
             merged_input = Concatenate(axis=1)([routes_input, reachability_input])
@@ -63,14 +66,14 @@ class Brain:
         out_actions = Reshape((self.action_shape_height, self.action_shape_width))(_out_actions)
         out_value = Dense(1, activation='linear')(dense_layer_2)
 
-        if TOPO:
+        if self.topo:
             model = Model(inputs=[topology_input, routes_input, reachability_input], outputs=[out_actions, out_value])
         else:
             model = Model(inputs=[routes_input, reachability_input], outputs=[out_actions, out_value])
 
         model._make_predict_function()  # have to initialize before threading
         
-        if DEBUG:
+        if self.debug:
             print(model.summary())
 
         return model
@@ -149,7 +152,7 @@ class Brain:
         self.session.run(minimize, feed_dict={actual_next_hop_features: next_hop_features, actual_probabilities: actions, actual_rewards: rewards})
 
     def train_push(self, state, action, reward, state_):
-        if DEBUG:
+        if self.debug:
             print("Training Datum: Actual Next Hops: %s, Action: %s, Reward: %s" % (str(state), str(action), str(reward)))
 
         with self.lock_queue:
