@@ -1,9 +1,11 @@
+from __future__ import print_function
 import os
 import sys
 
 import argparse
 
 import tensorflow as tf
+import gym
 
 from deepwalk import get_deepwalk_representation
 
@@ -29,6 +31,7 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
             testing_instance_limit=TESTING_INSTANCE_LIMIT,
             verbose=VERBOSE, test=TESTING, debug=DEBUG):
 
+    global brain
     # TODO fix
     node_features = get_deepwalk_representation(ADJ_MAT)
 

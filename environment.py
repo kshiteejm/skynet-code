@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import time
 import itertools
 import threading
@@ -25,6 +27,7 @@ class Environment(threading.Thread):
         threading.Thread.__init__(self)
         self.instance_iter = 0
         self.deviation = 0.0
+        self.num_instances = 0
 
         self.node_features = node_features
         self.brain = brain
@@ -61,10 +64,11 @@ class Environment(threading.Thread):
         # self.env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree', deterministic=True)
         self.env.__init__(topo_size=4, num_flows=1, topo_style=TOPOLOGY, node_features=self.node_features)
         self.agent = Agent(self.env, self.brain, eps_start=eps_start, eps_end=eps_end, 
-                            eps_steps=eps_steps, verbose=self.verbose, test=self.testing, 
+                            eps_steps=eps_steps, verbose=self.verbose, test=self.test, 
                             debug=self.debug)
         self.time_begin = time.time()
         self.unique_id = Environment.INSTANCE_NUM.next()
+        self.num_instances += 1
         self.instance_iter = 0
         if self.debug:
             print("INSTANCE NUMBER: %d" % self.unique_id)
