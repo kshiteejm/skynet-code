@@ -1,6 +1,6 @@
 # some code fragments borrowed from Jaromir Janisch, 2017
 
-# from __future__ import print_function
+from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
@@ -180,7 +180,9 @@ class Brain:
         # priorities = tf.map_fn(lambda x: tf.squeeze(tf.import_graph_def(self.next_hop_priority_graph, input_map={"feature:0": x}, return_elements=["priority/BiasAdd:0"])), actual_next_hop_features, dtype=tf.float32)
         with tf.variable_scope("test", reuse=tf.AUTO_REUSE) as scope:
             priorities = tf.map_fn(lambda x: self._build_nhp_graph(x), actual_next_hop_features)
-        next_hop_probabilities = tf.nn.softmax(priorities)
+        print_op = tf.print(priorities)
+        with tf.control_dependencies([print_op]):
+            next_hop_probabilities = tf.nn.softmax(priorities)
         
         log_prob = tf.log(tf.reduce_sum(next_hop_probabilities * actual_probabilities) + 1e-10)
         advantage = actual_rewards - avg_rewards
@@ -450,9 +452,10 @@ class Agent:
             return action, True
         else:
             next_hop_features = np.array([state["next_hop_features"]])
+            probabilities = brain.predict_prob(next_hop_features)
             if DEBUG:
                 print("Next Hop Features: %s, %s" % (str(state["next_hop_features"]), str(state["next_hop_features"].shape)))
-            probabilities = brain.predict_prob(next_hop_features)[0]
+                print("Probabilities: %s, %s" % (str(probabilities), str(probabilities.shape)))
             action = self.env.get_random_next_hop(p=probabilities)
             return action, False
     
