@@ -5,7 +5,6 @@ import time
 import itertools
 import threading
 
-
 import gym
 import gym_skynet
 
@@ -71,7 +70,7 @@ class Environment(threading.Thread):
         self.unique_id = Environment.INSTANCE_NUM.next()
         self.num_instances += 1
         self.instance_iter = 0
-        logging.debug("INSTANCE NUMBER: %d", self.unique_id)
+        logging.debug("Instance Number: %d", self.unique_id)
 
     def runEpisode(self):
         state = self.env.reset()
