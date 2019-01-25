@@ -442,7 +442,7 @@ class SkynetEnv(gym.Env):
         # assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
 
         # get all necessary information before updating network state
-        flow_id, nxt_switch_id = action
+        (flow_id, nxt_switch_id), next_hops_len, chosen_next_hop_index = action
         done = False
         reward = -1
         src_switch_id, dst_switch_id = self.flow_details[flow_id]
