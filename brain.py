@@ -99,7 +99,7 @@ class Brain:
             if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
                 with tf.variable_scope("dense_priority_1", reuse=True):
                     weights = tf.get_variable("kernel")
-                    print_op = tf.print(Colorize.highlight(" Priority Graph: Priority Dense Layer 1 Weights:"), weights, ":Shape:", tf.shape(weights))
+                    print_op = tf.print(Colorize.highlight("Priority Graph: Priority Dense Layer 1 Weights:"), weights, ":Shape:", tf.shape(weights))
                 with tf.control_dependencies([print_op]):
                     out_priority = tf.layers.dense(dense_layer, 1, name="priority")
             else:
