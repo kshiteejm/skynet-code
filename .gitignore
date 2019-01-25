@@ -1,6 +1,7 @@
 *.egg-info
 *.pyc
 .idea
+*.pdf
 /logs
 *~
 .ipynb_checkpoints
@@ -9,3 +10,4 @@ skynet-tune/
 explore_skynet.txt
 
 skynet_venv/
+

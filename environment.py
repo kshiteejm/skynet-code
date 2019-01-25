@@ -1,3 +1,6 @@
+from __future__ import print_function
+
+import logging
 import time
 import itertools
 import threading
@@ -25,6 +28,7 @@ class Environment(threading.Thread):
         threading.Thread.__init__(self)
         self.instance_iter = 0
         self.deviation = 0.0
+        self.num_instances = 0
 
         self.node_features = node_features
         self.brain = brain
@@ -61,18 +65,17 @@ class Environment(threading.Thread):
         # self.env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree', deterministic=True)
         self.env.__init__(topo_size=4, num_flows=1, topo_style=TOPOLOGY, node_features=self.node_features)
         self.agent = Agent(self.env, self.brain, eps_start=eps_start, eps_end=eps_end, 
-                            eps_steps=eps_steps, verbose=self.verbose, test=self.testing, 
+                            eps_steps=eps_steps, verbose=self.verbose, test=self.test, 
                             debug=self.debug)
         self.time_begin = time.time()
         self.unique_id = Environment.INSTANCE_NUM.next()
+        self.num_instances += 1
         self.instance_iter = 0
-        if self.debug:
-            print("INSTANCE NUMBER: %d" % self.unique_id)
+        logging.debug("INSTANCE NUMBER: %d", self.unique_id)
 
     def runEpisode(self):
         state = self.env.reset()
-        if self.debug:
-            print("Flow Details: %s" % str(self.env.flow_details))
+        logging.debug("Flow Details: %s", str(self.env.flow_details))
 
         while True:         
             time.sleep(self.thread_delay)
@@ -82,15 +85,13 @@ class Environment(threading.Thread):
             
             action, is_rand = self.agent.act(state)
             state_, reward, done, info = self.env.step(action)
-            if self.debug:
-                # print("Routes: %s" % str(state["routes"]))
-                print("Next Hop Features: %s, %s" % (str(state["next_hop_features"]), str(state["next_hop_features"].shape)))
-                print("Action: %s, Random: %s" % (str(action), str(is_rand)))
-                print("Reward: %s" % str(reward))
-
+            
+            logging.debug("Next Hop Features: %s, %s", str(state["next_hop_features"]), str(state["next_hop_features"].shape))
+            logging.debug("Action: %s, Random: %s", str(action), str(is_rand))
+            logging.debug("Reward: %s", str(reward))
+            
             if done:
-                if self.debug:
-                    print("DONE")
+                logging.debug("DONE")
                 state_ = None
                 if not self.env.is_game_over:
                     time_now = time.time()
@@ -98,8 +99,7 @@ class Environment(threading.Thread):
                     self.instance_iter = self.instance_iter + 1
                     instance_deviation = self.env.get_path_length_quality()
                     self.deviation = self.deviation + instance_deviation
-                    if self.verbose:
-                        print("TIME: %d, DEVIATION: %f" % ((time_now - self.time_begin), instance_deviation))
+                    logging.info("TIME: %d, DEVIATION: %f", (time_now - self.time_begin), instance_deviation)
             
             if not self.test:
                 self.agent.train(state, action, reward, state_)

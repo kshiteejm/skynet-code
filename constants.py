@@ -1,3 +1,7 @@
+import logging
+import gym
+import gym_skynet
+
 #-- constants
 ENV = 'Skynet-v0'
 

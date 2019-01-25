@@ -1,3 +1,6 @@
+from __future__ import print_function
+
+import logging
 import itertools
 import random
 
@@ -38,8 +41,8 @@ class Agent:
         else:
             eps_ret = self.eps_start + frames * (self.eps_end - self.eps_start) / self.eps_steps    # linearly interpolate
         
-        if self.verbose and not self.test and eps_ret == 0.0:
-            print("Switching to Pure Exploit")
+        if not self.test and eps_ret == 0.0:
+            logging.info("Switching to Pure Exploit")
 
     def act(self, state):
         eps = self.getEpsilon()
@@ -50,10 +53,9 @@ class Agent:
             return action, True
         else:
             next_hop_features = np.array([state["next_hop_features"]])
-            probabilities = self.brain.predict_prob(next_hop_features) 
-            if self.debug:
-                print("Next Hop Features: %s, %s" % (str(state["next_hop_features"]), str(state["next_hop_features"].shape)))
-                print("Probabilities: %s, %s" % (str(probabilities), str(probabilities.shape))) 
+            probabilities = self.brain.predict_prob(next_hop_features)
+            logging.debug("Next Hop Features: %s, %s", str(state["next_hop_features"]), str(state["next_hop_features"].shape))
+            logging.debug("Probabilities: %s, %s", str(probabilities), str(probabilities.shape))
             probabilities = self.brain.predict_prob(next_hop_features)[0]
             action = self.env.get_random_next_hop(p=probabilities)
             return action, False
