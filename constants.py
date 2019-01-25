@@ -63,20 +63,20 @@ class Colorize:
 
     @classmethod
     def red(cls, s):
-        print(cls.RED + s + cls.END)
+        return (cls.RED + s + cls.END)
 
     @classmethod
     def green(cls, s):
-        print(cls.GREEN + s + cls.END)
+        return (cls.GREEN + s + cls.END)
 
     @classmethod
     def yellow(cls, s):
-        print(cls.YELLOW + s + cls.END)
+        return (cls.YELLOW + s + cls.END)
 
     @classmethod
     def lightPurple(cls, s):
-        print(cls.LIGHT_PURPLE + s + cls.END)
+        return (cls.LIGHT_PURPLE + s + cls.END)
 
     @classmethod
     def purple(cls, s):
-        print(cls.PURPLE + s + cls.END)
+        return (cls.PURPLE + s + cls.END)
