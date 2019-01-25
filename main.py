@@ -3,6 +3,7 @@ from __future__ import print_function # python2 artifact
 import logging
 import os
 import sys
+import itertools
 
 import argparse
 
@@ -86,6 +87,8 @@ def test_model(node_features,
         training_instance_limit=TRAINING_INSTANCE_LIMIT, 
         testing_instance_limit=TESTING_INSTANCE_LIMIT,
         verbose=VERBOSE, test=TESTING, debug=DEBUG):
+    test = True
+    Environment.INSTANCE_NUM = itertools.count()
 
     envs = [Environment(node_features, brain, render=False, 
                 eps_start=eps_start, eps_end=eps_end, 
@@ -115,5 +118,5 @@ def delete():
     del brain
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     main()
