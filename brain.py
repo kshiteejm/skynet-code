@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import logging
 import time
 import threading
 
@@ -75,8 +76,7 @@ class Brain:
 
         model._make_predict_function()  # have to initialize before threading
         
-        if self.debug:
-            print(model.summary())
+        logging.debug(model.summary())
 
         return model
     
@@ -95,6 +95,7 @@ class Brain:
         with tf.variable_scope("test") as scope: 
             dense_layer = tf.layers.dense(inputs, 16, activation=tf.nn.relu)
             out_priority = tf.layers.dense(dense_layer, 1, name="priority") # linear activation
+            print_op = tf.print(out_priority)
             return out_priority
 
     def _build_next_hop_policy_graph(self):
@@ -147,7 +148,7 @@ class Brain:
         next_hop_features_ = np.vstack(states_)
 
         if len(next_hop_features) > 5*self.min_batch:
-            print("Optimizer alert! Minimizing batch of %d" % len(next_hop_features))
+            logging.debug("Optimizer alert! Minimizing batch of %d", len(next_hop_features))
         
         actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate = self.next_hop_policy_graph
 
@@ -157,8 +158,7 @@ class Brain:
         self.session.run(minimize, feed_dict={actual_next_hop_features: next_hop_features, actual_probabilities: actions, actual_rewards: rewards})
 
     def train_push(self, state, action, reward, state_):
-        if self.debug:
-            print("Training Datum: Actual Next Hops: %s, Action: %s, Reward: %s" % (str(state), str(action), str(reward)))
+        logging.debug("Training Datum: Actual Next Hops: %s, Action: %s, Reward: %s", str(state), str(action), str(reward))
 
         with self.lock_queue:
             # print "routes shape: %s" % str(state.shape)

@@ -1,4 +1,6 @@
-from __future__ import print_function
+from __future__ import print_function # python2 artifact
+
+import logging
 import os
 import sys
 
@@ -72,10 +74,8 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
     
     avg_training_deviation = training_deviation/(training_instances*1.0)
 
-    if verbose:
-        print("TRAINING PHASE ENDED.")
-        print("AVG TRAIN DEVIATION: %f" % avg_training_deviation)
-
+    logging.info("TRAINING PHASE ENDED.")
+    logging.info("AVG TRAIN DEVIATION: %f" % avg_training_deviation)
 
     test_model(node_features)
 
@@ -105,8 +105,7 @@ def test_model(node_features,
         test_deviation = test_deviation + e.deviation
 
     avg_test_deviation = test_deviation/(test_instances*1.0)
-    if verbose:
-        print("AVG TEST DEVIATION: %f"  % avg_test_deviation)
+    logging.info("AVG TEST DEVIATION: %f"  % avg_test_deviation)
 
     return avg_test_deviation
 
@@ -116,4 +115,5 @@ def delete():
     del brain
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
     main()
