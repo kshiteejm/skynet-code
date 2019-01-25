@@ -108,7 +108,21 @@ class Brain:
                     out_priority = tf.layers.dense(dense_layer, 1, name="priority")
             else:
                 out_priority = tf.layers.dense(dense_layer, 1, name="priority")
-            return tf.squeeze(out_priority)
+
+            if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+                print_op = tf.print(Colorize.highlight("Priority Graph: Next Hop Raw Priorities:"), out_priority, ":Shape:", tf.shape(out_priority))
+                with tf.control_dependencies([print_op]):
+                    # out_priority = tf.cond(tf.equal(tf.shape(out_priority)[0], 1), lambda: tf.identity(out_priority), lambda: tf.squeeze(out_priority))
+                    out_priority = tf.squeeze(out_priority, axis=-1)
+            else:
+                out_priority = tf.squeeze(out_priority, axis=-1)
+
+            if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+                print_op = tf.print(Colorize.highlight("Priority Graph: Next Hop Priorities:"), out_priority, ":Shape:", tf.shape(out_priority))
+                with tf.control_dependencies([print_op]):
+                    out_priority = tf.identity(out_priority)
+
+            return out_priority
 
     def _build_next_hop_policy_graph(self):
         actual_next_hop_features_shape = list(self.next_hop_feature_shape)
@@ -148,7 +162,7 @@ class Brain:
                     priorities = tf.map_fn(lambda x: self._build_next_hop_priority_graph(x), actual_next_hop_features)
         else:
             with tf.variable_scope("priority_graph", reuse=tf.AUTO_REUSE):
-                priorities = tf.map_fn(lambda x: tf.squeeze(self._build_next_hop_priority_graph(x)), actual_next_hop_features)
+                priorities = tf.map_fn(lambda x: self._build_next_hop_priority_graph(x), actual_next_hop_features)
         
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
             print_op = tf.print(Colorize.highlight("Policy Graph: Priorities Estimate:"), priorities, ":Shape:", tf.shape(priorities))

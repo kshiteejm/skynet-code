@@ -439,7 +439,6 @@ class SkynetEnv(gym.Env):
         topology = self.state["topology"]
         routes = self.state["routes"]
         reachability = self.state["reachability"]
-        # assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
 
         # get all necessary information before updating network state
         (flow_id, nxt_switch_id), next_hops_len, chosen_next_hop_index = action

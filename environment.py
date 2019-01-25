@@ -85,7 +85,7 @@ class Environment(threading.Thread):
             action, is_rand = self.agent.act(state)
             state_, reward, done, info = self.env.step(action)
             
-            logging.debug("Next Hop Features: %s, %s", str(state["next_hop_features"]), str(state["next_hop_features"].shape))
+            # logging.debug("Next Hop Features: %s, %s", str(state["next_hop_features"]), str(state["next_hop_features"].shape))
             logging.debug("Action: %s, Random: %s", str(action), str(is_rand))
             logging.debug("Reward: %s", str(reward))
             
