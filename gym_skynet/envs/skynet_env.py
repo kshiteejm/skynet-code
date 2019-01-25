@@ -322,6 +322,8 @@ class SkynetEnv(gym.Env):
             for switch_id in reachable_to_dst_next_switch_ids:
                 next_hop_features.append(np.concatenate((node_features[switch_id-1], node_features[recent_switch_id-1], node_features[dst_switch_id-1], node_features[src_switch_id-1])))
                 next_hop_details.append((flow_id, switch_id))
+            logging.debug("flow-id: %s, src: %s, dst: %s", flow_id, src_switch_id, dst_switch_id)
+            logging.debug("nxt-hop-details: %s", next_hop_details)
         return np.array(next_hop_features), next_hop_details
 
     # get a next hop link for an incomplete flow adhering to a particular probability distribution
