@@ -48,3 +48,35 @@ NULL_STATE = _env.get_null_state()
 ADJ_MAT = _env.state["topology"]
 
 del _env
+
+class Colorize:
+    RED = '\033[91m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    LIGHT_PURPLE = '\033[94m'
+    PURPLE = '\033[95m'
+    END = '\033[0m'
+
+    @classmethod
+    def highlight(cls, s):
+        return ("\x1b[6;30;42m" + s + "\x1b[0m")
+
+    @classmethod
+    def red(cls, s):
+        print(cls.RED + s + cls.END)
+
+    @classmethod
+    def green(cls, s):
+        print(cls.GREEN + s + cls.END)
+
+    @classmethod
+    def yellow(cls, s):
+        print(cls.YELLOW + s + cls.END)
+
+    @classmethod
+    def lightPurple(cls, s):
+        print(cls.LIGHT_PURPLE + s + cls.END)
+
+    @classmethod
+    def purple(cls, s):
+        print(cls.PURPLE + s + cls.END)
