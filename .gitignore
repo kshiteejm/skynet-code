@@ -11,4 +11,5 @@ skynet-tune/
 explore_skynet.txt
 
 skynet_venv/
+.vscode/
 
