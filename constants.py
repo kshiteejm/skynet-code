@@ -30,7 +30,6 @@ MODEL_VERSION = 1   # state-dependent
 
 TOPOLOGY = 'fat_tree'
 
-
 TOPO_FEAT = True
 
 DEBUG = True

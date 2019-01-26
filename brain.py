@@ -14,7 +14,8 @@ from constants import GAMMA, LEARNING_RATE, N_STEP_RETURN, MIN_BATCH, LOSS_V, LO
                     TOPO_FEAT, OBSERVATION_SPACE, ACTION_SPACE, DEBUG, Colorize
 
 class Brain:
-    train_queue = [ [[], [], []], [], [], [[], [], []], [] ]    # s, a, r, s', s' terminal mask
+    # train_queue = [ [[], [], []], [], [], [[], [], []], [] ]    # s, a, r, s', s' terminal mask
+    train_queue = [ [], [], [], [], [] ]
     lock_queue = threading.Lock()
 
     def __init__(self, node_features, gamma=GAMMA, n_step_return=N_STEP_RETURN, 
@@ -176,8 +177,15 @@ class Brain:
             with tf.control_dependencies([print_op]):
                 next_hop_probabilities = tf.identity(next_hop_probabilities)
         
-        log_prob = tf.log(tf.reduce_sum(next_hop_probabilities * actual_probabilities) + 1e-10)
-        advantage = actual_rewards - avg_rewards
+        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+            print_op_1 = tf.print(Colorize.highlight("Policy Graph: Actual Probabilities:"), actual_probabilities, ":Shape:", tf.shape(actual_probabilities))
+            print_op_2 = tf.print(Colorize.highlight("Policy Graph: Actual Rewards:"), actual_rewards, ":Shape:", tf.shape(actual_rewards))
+            with tf.control_dependencies([print_op_1, print_op_2]):
+                log_prob = tf.log(tf.reduce_sum(next_hop_probabilities * actual_probabilities) + 1e-10)
+                advantage = actual_rewards - avg_rewards
+        else:
+            log_prob = tf.log(tf.reduce_sum(next_hop_probabilities * actual_probabilities) + 1e-10)
+            advantage = actual_rewards - avg_rewards
 
         loss_policy = - log_prob * tf.stop_gradient(advantage)  # maximize policy
         loss_value = self.loss_v * tf.square(advantage)    # minimize value error
@@ -202,11 +210,16 @@ class Brain:
         
         self.train_iteration = self.train_iteration + 1
 
-        # # logging.info("STATE: %s", str(states))
-        # for state in states:
+        # logging.info("ACTIONS: %s", actions)
+        # for i in range(0, len(states)):
         #     # logging.info("State: %s", state)
+        #     state = states[i]
+        #     action = actions[i]
+        #     if len(state) == 0:
+        #         logging.info("Features Shape: %s, Action Shape: %s", state, action[0].shape)
         #     if len(state) > 0:
-        #         logging.info("State Shape: %s", str(state[0].shape))
+        #         logging.info("Features Shape: %s, Action Shape: %s", state[0].shape, action[0].shape)
+
         # next_hop_features = np.array(states)  
         # actions = np.array(actions)
         # rewards = np.array(rewards)
@@ -228,13 +241,18 @@ class Brain:
             reward = np.vstack([rewards[i]])
             next_hop_feature_ = np.vstack([states_[i]])
 
-            avg_reward = self.session.run(avg_rewards_estimate, feed_dict={actual_next_hop_features: next_hop_feature_})
+            logging.debug("Next Hop Feature Shape: %s", next_hop_feature.shape)
+            logging.debug("Action: %s, Shape: %s", action, action.shape)
+            logging.debug("Reward: %s, Shape: %s", reward, reward.shape)
+            logging.debug("Next Hop Feature Last Shape: %s", next_hop_feature_.shape)
+
+            if next_hop_feature_[0].size == 0:
+                avg_reward = 0.0
+            else:
+                avg_reward = self.session.run(avg_rewards_estimate, feed_dict={actual_next_hop_features: next_hop_feature_})
+            
             reward = reward + self.gamma_n * avg_reward * np.array([state_masks[i]])
 
-            logging.info("Next Hop Feature: %s, Shape: %s", next_hop_feature, next_hop_feature.shape)
-            logging.info("Action: %s, Shape: %s", action, action.shape)
-            logging.info("Reward: %s, Shape: %s", reward, reward.shape)
-            logging.info("Next Hop Feature Last: %s, Shape: %s", next_hop_feature_, next_hop_feature_.shape)
             self.session.run(minimize, feed_dict={actual_next_hop_features: next_hop_feature, actual_probabilities: action, actual_rewards: reward})
 
         # avg_rewards = self.session.run(avg_rewards_estimate, feed_dict={actual_next_hop_features: next_hop_features_})
@@ -243,7 +261,7 @@ class Brain:
 
 
     def train_push(self, state, action, reward, state_):
-        logging.debug("Training Datum: Actual Next Hops: %s, Action: %s, Reward: %s", str(state), str(action), str(reward))
+        logging.debug("Training Datum: Actual Next Hops Shape: %s, Action: %s, Reward: %s", str(state.shape), str(action), str(reward))
 
         with self.lock_queue:
             # print "routes shape: %s" % str(state.shape)

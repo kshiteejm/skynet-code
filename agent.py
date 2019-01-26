@@ -56,8 +56,6 @@ class Agent:
         else:
             next_hop_features = np.array([state["next_hop_features"]])
             probabilities = self.brain.predict_prob(next_hop_features)[0]
-            # logging.debug("Next Hop Features: %s, %s", str(next_hop_features), str(next_hop_features.shape))
-            # logging.debug("Probabilities: %s, %s", str(probabilities), str(probabilities.shape))
             action = self.env.get_random_next_hop(p=probabilities)
             return action, False
     
@@ -71,7 +69,6 @@ class Agent:
         next_hop, next_hop_len, next_hop_index = action
         action_one_hot_encoded = np.zeros(next_hop_len)
         action_one_hot_encoded[next_hop_index] = 1
-        logging.info("Agent: One Hot Action: %s, Shape: %s", action_one_hot_encoded, action_one_hot_encoded.shape)
 
         self.memory.append( (state, action_one_hot_encoded, reward, state_) )
 
