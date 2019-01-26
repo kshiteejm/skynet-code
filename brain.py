@@ -129,7 +129,7 @@ class Brain:
         actual_next_hop_features_shape.insert(0, None)
         actual_next_hop_features_shape.insert(0, None)
         actual_next_hop_features = tf.placeholder(tf.float32, shape=actual_next_hop_features_shape)
-        actual_probabilities = tf.placeholder(tf.float32, shape=(None,None,1))
+        actual_probabilities = tf.placeholder(tf.float32, shape=(None,None))
         actual_rewards = tf.placeholder(tf.float32, shape=(None,1))
         
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
@@ -202,20 +202,45 @@ class Brain:
         
         self.train_iteration = self.train_iteration + 1
 
-        next_hop_features = np.vstack(states)
-        actions = np.vstack(actions)
-        rewards = np.vstack(rewards)
-        next_hop_features_ = np.vstack(states_)
+        # # logging.info("STATE: %s", str(states))
+        # for state in states:
+        #     # logging.info("State: %s", state)
+        #     if len(state) > 0:
+        #         logging.info("State Shape: %s", str(state[0].shape))
+        # next_hop_features = np.array(states)  
+        # actions = np.array(actions)
+        # rewards = np.array(rewards)
+        # next_hop_features_ = np.array(states_)
 
-        if len(next_hop_features) > 5*self.min_batch:
-            logging.debug("Optimizer alert! Minimizing batch of %d", len(next_hop_features))
+        if len(states) > 5*self.min_batch:
+            logging.debug("Optimizer alert! Minimizing batch of %d", len(states))
         
+        logging.info("==================Training the Network=================")
+
         actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate = self.next_hop_policy_graph
 
-        avg_rewards = self.session.run(avg_rewards_estimate, feed_dict={avg_rewards_estimate})
-        rewards = rewards + self.gamma_n * avg_rewards * state_masks
+        for i in range(0, len(states)):
+            if len(states[i]) == 0:
+                continue
+            
+            next_hop_feature = np.vstack([states[i]])
+            action = np.vstack([actions[i]])
+            reward = np.vstack([rewards[i]])
+            next_hop_feature_ = np.vstack([states_[i]])
 
-        self.session.run(minimize, feed_dict={actual_next_hop_features: next_hop_features, actual_probabilities: actions, actual_rewards: rewards})
+            avg_reward = self.session.run(avg_rewards_estimate, feed_dict={actual_next_hop_features: next_hop_feature_})
+            reward = reward + self.gamma_n * avg_reward * np.array([state_masks[i]])
+
+            logging.info("Next Hop Feature: %s, Shape: %s", next_hop_feature, next_hop_feature.shape)
+            logging.info("Action: %s, Shape: %s", action, action.shape)
+            logging.info("Reward: %s, Shape: %s", reward, reward.shape)
+            logging.info("Next Hop Feature Last: %s, Shape: %s", next_hop_feature_, next_hop_feature_.shape)
+            self.session.run(minimize, feed_dict={actual_next_hop_features: next_hop_feature, actual_probabilities: action, actual_rewards: reward})
+
+        # avg_rewards = self.session.run(avg_rewards_estimate, feed_dict={actual_next_hop_features: next_hop_features_})
+        # rewards = rewards + self.gamma_n * avg_rewards * state_masks
+        # self.session.run(minimize, feed_dict={actual_next_hop_features: next_hop_features, actual_probabilities: actions, actual_rewards: rewards})
+
 
     def train_push(self, state, action, reward, state_):
         logging.debug("Training Datum: Actual Next Hops: %s, Action: %s, Reward: %s", str(state), str(action), str(reward))

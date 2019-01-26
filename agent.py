@@ -10,6 +10,7 @@ from constants import EPS_START, EPS_END, EPS_STEPS, DEBUG, VERBOSE, TESTING
 
 class Agent:
     FRAMES = itertools.count()
+    EXPLOIT = itertools.count()
 
     def __init__(self, env, brain, eps_start=EPS_START, eps_end=EPS_END, 
                 eps_steps=EPS_STEPS, verbose=VERBOSE, test=TESTING, debug=DEBUG):
@@ -41,7 +42,8 @@ class Agent:
         else:
             eps_ret = self.eps_start + frames * (self.eps_end - self.eps_start) / self.eps_steps    # linearly interpolate
         
-        if not self.test and eps_ret == 0.0:
+        if not self.test and eps_ret == 0.0 and Agent.EXPLOIT.next() == 0:
+            Agent.EXPLOIT.next()
             logging.info("Switching to Pure Exploit")
 
     def act(self, state):
@@ -69,6 +71,7 @@ class Agent:
         next_hop, next_hop_len, next_hop_index = action
         action_one_hot_encoded = np.zeros(next_hop_len)
         action_one_hot_encoded[next_hop_index] = 1
+        logging.info("Agent: One Hot Action: %s, Shape: %s", action_one_hot_encoded, action_one_hot_encoded.shape)
 
         self.memory.append( (state, action_one_hot_encoded, reward, state_) )
 

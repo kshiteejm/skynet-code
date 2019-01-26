@@ -118,5 +118,8 @@ def delete():
     del brain
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
+    # logger = logging.getLogger('root')
+    # FORMAT = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
+    # logging.basicConfig(format=FORMAT)
+    logging.basicConfig(level=logging.DEBUG)
     main()
