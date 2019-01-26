@@ -550,4 +550,4 @@ class SkynetEnv(gym.Env):
 
     def seed(self, seed=None):
         random.seed(seed)
-        np.random.seed
+        np.random.seed(seed)

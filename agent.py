@@ -36,19 +36,21 @@ class Agent:
 
     def getEpsilon(self):
         eps_ret = 0.0
-        frames = Agent.FRAMES.next()
+        frames = next(Agent.FRAMES)
         if frames >= self.eps_steps:
             eps_ret = self.eps_end
         else:
             eps_ret = self.eps_start + frames * (self.eps_end - self.eps_start) / self.eps_steps    # linearly interpolate
         
-        if not self.test and eps_ret == 0.0 and Agent.EXPLOIT.next() == 0:
-            Agent.EXPLOIT.next()
+        if not self.test and eps_ret == 0.0 and next(Agent.EXPLOIT) == 0:
+            next(Agent.EXPLOIT)
             logging.info("Switching to Pure Exploit")
+
+        return eps_ret
 
     def act(self, state):
         eps = self.getEpsilon()
-        Agent.FRAMES.next()
+        next(Agent.FRAMES)
 
         if random.random() < eps and not self.test:
             action = self.env.get_random_next_hop()
