@@ -11,10 +11,11 @@ from keras.layers import Input, Concatenate, Flatten, Dense, Reshape
 from keras.models import Model
 
 from constants import GAMMA, LEARNING_RATE, N_STEP_RETURN, MIN_BATCH, LOSS_V, LOSS_ENTROPY, \
-                    TOPO_FEAT, OBSERVATION_SPACE, ACTION_SPACE, DEBUG
+                    TOPO_FEAT, OBSERVATION_SPACE, ACTION_SPACE, DEBUG, Colorize
 
 class Brain:
-    train_queue = [ [[], [], []], [], [], [[], [], []], [] ]    # s, a, r, s', s' terminal mask
+    # train_queue = [ [[], [], []], [], [], [[], [], []], [] ]    # s, a, r, s', s' terminal mask
+    train_queue = [ [], [], [], [], [] ]
     lock_queue = threading.Lock()
 
     def __init__(self, node_features, gamma=GAMMA, n_step_return=N_STEP_RETURN, 
@@ -45,7 +46,7 @@ class Brain:
         self.action_shape_width = int(ACTION_SPACE.high[1])
         self.next_hop_feature_shape = list([node_features[0].shape[0]*4])
 
-        self.next_hop_priority_graph = self._build_next_hop_priority_graph()
+        # self.next_hop_priority_graph = self._build_next_hop_priority_graph()
         self.next_hop_policy_graph = self._build_next_hop_policy_graph()
 
         self.session.run(tf.global_variables_initializer())
@@ -80,7 +81,7 @@ class Brain:
 
         return model
     
-    def _build_next_hop_priority_graph(self):
+    def _build_next_hop_priority_graph_old(self):
         with tf.Graph().as_default() as next_hop_priority_graph:
             next_hop_feature_shape = list(self.next_hop_feature_shape)
             next_hop_feature_shape.insert(0, None)
@@ -91,16 +92,37 @@ class Brain:
             sess.run(tf.global_variables_initializer())
         return next_hop_priority_graph
     
-    def _build_nhp_graph(self, inputs):
-        with tf.variable_scope("test"): 
-            # writer = tf.summary.FileWriter("logs", self.session.graph)
-            # writer.close()
-            dense_layer = tf.layers.dense(inputs, 16, activation=tf.nn.relu, name="dense")
-            with tf.variable_scope("dense", reuse=True):
-                weights = tf.get_variable("kernel")
-                print_op = tf.print(weights)
-            with tf.control_dependencies([print_op]):
-                out_priority = tf.layers.dense(dense_layer, 1, name="priority") # linear activation    
+    def _build_next_hop_priority_graph(self, inputs):
+        with tf.variable_scope("priority_graph"): 
+            if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+                print_op = tf.print(Colorize.highlight("Priority Graph: Input Hops:"), inputs, ":Shape:", tf.shape(inputs))
+                with tf.control_dependencies([print_op]):
+                    dense_layer = tf.layers.dense(inputs, 16, activation=tf.nn.relu, name="dense_priority_1")
+            else:
+                dense_layer = tf.layers.dense(inputs, 16, activation=tf.nn.relu, name="dense_priority_1")
+            
+            if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+                with tf.variable_scope("dense_priority_1", reuse=True):
+                    weights = tf.get_variable("kernel")
+                    print_op = tf.print(Colorize.highlight("Priority Graph: Priority Dense Layer 1 Weights:"), weights, ":Shape:", tf.shape(weights))
+                with tf.control_dependencies([print_op]):
+                    out_priority = tf.layers.dense(dense_layer, 1, name="priority")
+            else:
+                out_priority = tf.layers.dense(dense_layer, 1, name="priority")
+
+            if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+                print_op = tf.print(Colorize.highlight("Priority Graph: Next Hop Raw Priorities:"), out_priority, ":Shape:", tf.shape(out_priority))
+                with tf.control_dependencies([print_op]):
+                    # out_priority = tf.cond(tf.equal(tf.shape(out_priority)[0], 1), lambda: tf.identity(out_priority), lambda: tf.squeeze(out_priority))
+                    out_priority = tf.squeeze(out_priority, axis=-1)
+            else:
+                out_priority = tf.squeeze(out_priority, axis=-1)
+
+            if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+                print_op = tf.print(Colorize.highlight("Priority Graph: Next Hop Priorities:"), out_priority, ":Shape:", tf.shape(out_priority))
+                with tf.control_dependencies([print_op]):
+                    out_priority = tf.identity(out_priority)
+
             return out_priority
 
     def _build_next_hop_policy_graph(self):
@@ -108,21 +130,62 @@ class Brain:
         actual_next_hop_features_shape.insert(0, None)
         actual_next_hop_features_shape.insert(0, None)
         actual_next_hop_features = tf.placeholder(tf.float32, shape=actual_next_hop_features_shape)
-        actual_probabilities = tf.placeholder(tf.float32, shape=(None,None,1))
+        actual_probabilities = tf.placeholder(tf.float32, shape=(None,None))
         actual_rewards = tf.placeholder(tf.float32, shape=(None,1))
         
-        avg_next_hop_features = tf.reduce_mean(actual_next_hop_features, axis=1)
-        dense_layer = tf.layers.dense(avg_next_hop_features, 16, activation=tf.nn.relu)
-        avg_rewards = tf.layers.dense(dense_layer, 1, name="reward") # linear activation
-        with tf.variable_scope("test", reuse=tf.AUTO_REUSE):
-            priorities = tf.map_fn(lambda x: self._build_nhp_graph(x), actual_next_hop_features)
-            
-        print_op = tf.print(priorities)
-        with tf.control_dependencies([print_op]):
-            next_hop_probabilities = tf.nn.softmax(priorities) 
+        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+            print_op = tf.print(Colorize.highlight("Policy Graph: Actual Next Hop Features:"), actual_next_hop_features, ":Shape:", tf.shape(actual_next_hop_features))
+            with tf.control_dependencies([print_op]):
+                avg_next_hop_features = tf.reduce_mean(actual_next_hop_features, axis=1)
+        else:
+            avg_next_hop_features = tf.reduce_mean(actual_next_hop_features, axis=1)
         
-        log_prob = tf.log(tf.reduce_sum(next_hop_probabilities * actual_probabilities) + 1e-10)
-        advantage = actual_rewards - avg_rewards
+        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+            print_op = tf.print(Colorize.highlight("Policy Graph: Average Next Hop Features:"), avg_next_hop_features, ":Shape:", tf.shape(avg_next_hop_features))
+            with tf.control_dependencies([print_op]):
+                dense_layer = tf.layers.dense(avg_next_hop_features, 16, activation=tf.nn.relu, name="dense_policy_1")
+        else:
+            dense_layer = tf.layers.dense(avg_next_hop_features, 16, activation=tf.nn.relu, name="dense_policy_1")
+        
+        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+            with tf.variable_scope("dense_policy_1", reuse=True):
+                weights = tf.get_variable("kernel")
+                print_op = tf.print(Colorize.highlight("Policy Graph: Reward Dense Layer 1 Weights:"), weights, ":Shape:", tf.shape(weights))
+            with tf.control_dependencies([print_op]):
+                avg_rewards = tf.layers.dense(dense_layer, 1, name="reward") # linear activation
+        else:
+            avg_rewards = tf.layers.dense(dense_layer, 1, name="reward") # linear activation
+        
+        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+            print_op = tf.print(Colorize.highlight("Policy Graph: Average Rewards Estimate:"), avg_rewards, ":Shape:", tf.shape(avg_rewards))
+            with tf.control_dependencies([print_op]):
+                with tf.variable_scope("priority_graph", reuse=tf.AUTO_REUSE):
+                    priorities = tf.map_fn(lambda x: self._build_next_hop_priority_graph(x), actual_next_hop_features)
+        else:
+            with tf.variable_scope("priority_graph", reuse=tf.AUTO_REUSE):
+                priorities = tf.map_fn(lambda x: self._build_next_hop_priority_graph(x), actual_next_hop_features)
+        
+        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+            print_op = tf.print(Colorize.highlight("Policy Graph: Priorities Estimate:"), priorities, ":Shape:", tf.shape(priorities))
+            with tf.control_dependencies([print_op]):
+                next_hop_probabilities = tf.map_fn(lambda x: tf.nn.softmax(x), priorities)
+        else:
+            next_hop_probabilities = tf.map_fn(lambda x: tf.nn.softmax(x), priorities)
+        
+        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+            print_op = tf.print(Colorize.highlight("Policy Graph: Next Hop Probabilities:"), next_hop_probabilities, ":Shape:", tf.shape(next_hop_probabilities))
+            with tf.control_dependencies([print_op]):
+                next_hop_probabilities = tf.identity(next_hop_probabilities)
+        
+        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+            print_op_1 = tf.print(Colorize.highlight("Policy Graph: Actual Probabilities:"), actual_probabilities, ":Shape:", tf.shape(actual_probabilities))
+            print_op_2 = tf.print(Colorize.highlight("Policy Graph: Actual Rewards:"), actual_rewards, ":Shape:", tf.shape(actual_rewards))
+            with tf.control_dependencies([print_op_1, print_op_2]):
+                log_prob = tf.log(tf.reduce_sum(next_hop_probabilities * actual_probabilities) + 1e-10)
+                advantage = actual_rewards - avg_rewards
+        else:
+            log_prob = tf.log(tf.reduce_sum(next_hop_probabilities * actual_probabilities) + 1e-10)
+            advantage = actual_rewards - avg_rewards
 
         loss_policy = - log_prob * tf.stop_gradient(advantage)  # maximize policy
         loss_value = self.loss_v * tf.square(advantage)    # minimize value error
@@ -147,23 +210,58 @@ class Brain:
         
         self.train_iteration = self.train_iteration + 1
 
-        next_hop_features = np.vstack(states)
-        actions = np.vstack(actions)
-        rewards = np.vstack(rewards)
-        next_hop_features_ = np.vstack(states_)
+        # logging.info("ACTIONS: %s", actions)
+        # for i in range(0, len(states)):
+        #     # logging.info("State: %s", state)
+        #     state = states[i]
+        #     action = actions[i]
+        #     if len(state) == 0:
+        #         logging.info("Features Shape: %s, Action Shape: %s", state, action[0].shape)
+        #     if len(state) > 0:
+        #         logging.info("Features Shape: %s, Action Shape: %s", state[0].shape, action[0].shape)
 
-        if len(next_hop_features) > 5*self.min_batch:
-            logging.debug("Optimizer alert! Minimizing batch of %d", len(next_hop_features))
+        # next_hop_features = np.array(states)  
+        # actions = np.array(actions)
+        # rewards = np.array(rewards)
+        # next_hop_features_ = np.array(states_)
+
+        if len(states) > 5*self.min_batch:
+            logging.debug("Optimizer alert! Minimizing batch of %d", len(states))
         
+        logging.info("==================Training the Network=================")
+
         actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate = self.next_hop_policy_graph
 
-        avg_rewards = self.session.run(avg_rewards_estimate, feed_dict={avg_rewards_estimate})
-        rewards = rewards + self.gamma_n * avg_rewards * state_masks
+        for i in range(0, len(states)):
+            if len(states[i]) == 0:
+                continue
+            
+            next_hop_feature = np.vstack([states[i]])
+            action = np.vstack([actions[i]])
+            reward = np.vstack([rewards[i]])
+            next_hop_feature_ = np.vstack([states_[i]])
 
-        self.session.run(minimize, feed_dict={actual_next_hop_features: next_hop_features, actual_probabilities: actions, actual_rewards: rewards})
+            logging.debug("Next Hop Feature Shape: %s", next_hop_feature.shape)
+            logging.debug("Action: %s, Shape: %s", action, action.shape)
+            logging.debug("Reward: %s, Shape: %s", reward, reward.shape)
+            logging.debug("Next Hop Feature Last Shape: %s", next_hop_feature_.shape)
+
+            if next_hop_feature_[0].size == 0:
+                avg_reward = 0.0
+            else:
+                avg_reward = self.session.run(avg_rewards_estimate, feed_dict={actual_next_hop_features: next_hop_feature_})
+            
+            reward = reward + self.gamma_n * avg_reward * np.array([state_masks[i]])
+
+            self.session.run(minimize, feed_dict={actual_next_hop_features: next_hop_feature, actual_probabilities: action, actual_rewards: reward})
+
+        # avg_rewards = self.session.run(avg_rewards_estimate, feed_dict={actual_next_hop_features: next_hop_features_})
+        # rewards = rewards + self.gamma_n * avg_rewards * state_masks
+        # self.session.run(minimize, feed_dict={actual_next_hop_features: next_hop_features, actual_probabilities: actions, actual_rewards: rewards})
+
 
     def train_push(self, state, action, reward, state_):
-        logging.debug("Training Datum: Actual Next Hops: %s, Action: %s, Reward: %s", str(state), str(action), str(reward))
+        logging.debug("Training Datum: Actual Next Hops Shape: %s, Action: %s, Reward: %s", str(state.shape), str(action), str(reward))
 
         with self.lock_queue:
             # print "routes shape: %s" % str(state.shape)

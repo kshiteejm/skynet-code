@@ -10,6 +10,7 @@ from constants import EPS_START, EPS_END, EPS_STEPS, DEBUG, VERBOSE, TESTING
 
 class Agent:
     FRAMES = itertools.count()
+    EXPLOIT = itertools.count()
 
     def __init__(self, env, brain, eps_start=EPS_START, eps_end=EPS_END, 
                 eps_steps=EPS_STEPS, verbose=VERBOSE, test=TESTING, debug=DEBUG):
@@ -41,7 +42,8 @@ class Agent:
         else:
             eps_ret = self.eps_start + frames * (self.eps_end - self.eps_start) / self.eps_steps    # linearly interpolate
         
-        if not self.test and eps_ret == 0.0:
+        if not self.test and eps_ret == 0.0 and Agent.EXPLOIT.next() == 0:
+            Agent.EXPLOIT.next()
             logging.info("Switching to Pure Exploit")
 
     def act(self, state):
@@ -53,9 +55,6 @@ class Agent:
             return action, True
         else:
             next_hop_features = np.array([state["next_hop_features"]])
-            probabilities = self.brain.predict_prob(next_hop_features)
-            logging.debug("Next Hop Features: %s, %s", str(state["next_hop_features"]), str(state["next_hop_features"].shape))
-            logging.debug("Probabilities: %s, %s", str(probabilities), str(probabilities.shape))
             probabilities = self.brain.predict_prob(next_hop_features)[0]
             action = self.env.get_random_next_hop(p=probabilities)
             return action, False

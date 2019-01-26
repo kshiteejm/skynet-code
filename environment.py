@@ -5,7 +5,6 @@ import time
 import itertools
 import threading
 
-
 import gym
 import gym_skynet
 
@@ -71,7 +70,7 @@ class Environment(threading.Thread):
         self.unique_id = Environment.INSTANCE_NUM.next()
         self.num_instances += 1
         self.instance_iter = 0
-        logging.debug("INSTANCE NUMBER: %d", self.unique_id)
+        logging.debug("Instance Number: %d", self.unique_id)
 
     def runEpisode(self):
         state = self.env.reset()
@@ -86,13 +85,13 @@ class Environment(threading.Thread):
             action, is_rand = self.agent.act(state)
             state_, reward, done, info = self.env.step(action)
             
-            logging.debug("Next Hop Features: %s, %s", str(state["next_hop_features"]), str(state["next_hop_features"].shape))
+            logging.debug("Next Hop Features Shape:  %s", str(state["next_hop_features"].shape))
             logging.debug("Action: %s, Random: %s", str(action), str(is_rand))
             logging.debug("Reward: %s", str(reward))
             
             if done:
                 logging.debug("DONE")
-                state_ = None
+                # state_ = None
                 if not self.env.is_game_over:
                     time_now = time.time()
                     self.stop_signal = True
@@ -102,7 +101,7 @@ class Environment(threading.Thread):
                     logging.info("TIME: %d, DEVIATION: %f", (time_now - self.time_begin), instance_deviation)
             
             if not self.test:
-                self.agent.train(state, action, reward, state_)
+                self.agent.train(state["next_hop_features"], action, reward, state_["next_hop_features"])
 
             state = state_
 

@@ -30,12 +30,11 @@ MODEL_VERSION = 1   # state-dependent
 
 TOPOLOGY = 'fat_tree'
 
-
 TOPO_FEAT = True
 
 DEBUG = True
 VERBOSE = True
-TESTING = True
+TESTING = False
 
 TRAINING_INSTANCE_LIMIT = 10000 
 TESTING_INSTANCE_LIMIT = 1000
@@ -48,3 +47,35 @@ NULL_STATE = _env.get_null_state()
 ADJ_MAT = _env.state["topology"]
 
 del _env
+
+class Colorize:
+    RED = '\033[91m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    LIGHT_PURPLE = '\033[94m'
+    PURPLE = '\033[95m'
+    END = '\033[0m'
+
+    @classmethod
+    def highlight(cls, s):
+        return ("\x1b[6;30;42m" + s + "\x1b[0m")
+
+    @classmethod
+    def red(cls, s):
+        return (cls.RED + s + cls.END)
+
+    @classmethod
+    def green(cls, s):
+        return (cls.GREEN + s + cls.END)
+
+    @classmethod
+    def yellow(cls, s):
+        return (cls.YELLOW + s + cls.END)
+
+    @classmethod
+    def lightPurple(cls, s):
+        return (cls.LIGHT_PURPLE + s + cls.END)
+
+    @classmethod
+    def purple(cls, s):
+        return (cls.PURPLE + s + cls.END)
