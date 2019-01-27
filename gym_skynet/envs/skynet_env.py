@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 # core modules
+import logging
+
 import math
 import random
 
@@ -320,6 +322,8 @@ class SkynetEnv(gym.Env):
             for switch_id in reachable_to_dst_next_switch_ids:
                 next_hop_features.append(np.concatenate((node_features[switch_id-1], node_features[recent_switch_id-1], node_features[dst_switch_id-1], node_features[src_switch_id-1])))
                 next_hop_details.append((flow_id, switch_id))
+            logging.debug("flow-id: %s, src: %s, dst: %s", flow_id, src_switch_id, dst_switch_id)
+            logging.debug("nxt-hop-details: %s", next_hop_details)
         return np.array(next_hop_features), next_hop_details
 
     # get a next hop link for an incomplete flow adhering to a particular probability distribution
@@ -346,18 +350,18 @@ class SkynetEnv(gym.Env):
                 else:
                     masked_p[flow_id - 1][switch_id - 1] = p[flow_id - 1][switch_id - 1] + 1e-7
             if len(reachable_to_dst_next_switch_ids) == 0:
-                print "Flow %d from %d to %d has no next hop from %d" % (flow_id, src_switch_id, dst_switch_id, recent_switch_id)
+                logging.info("Flow %d from %d to %d has no next hop from %d", flow_id, src_switch_id, dst_switch_id, recent_switch_id)
         flow_p = np.sum(masked_p, axis=1)
         flow_p_sum = np.sum(flow_p)
         if flow_p_sum == 0:
-            print "No Viable Action Exception"
+            logging.info("No Viable Action Exception")
             return (-1 , -1)
         flow_p = [p/flow_p_sum for p in flow_p]
         random_flow_id = np.random.choice(range(1, self.num_flows + 1), p=flow_p)
         switch_p = masked_p[random_flow_id - 1]
         switch_p_sum = np.sum(switch_p)
         if switch_p_sum == 0:
-            print "Flow Not Viable Exception"
+            logging.info("Flow Not Viable Exception")
             return (random_flow_id, -1)
         switch_p = [p/switch_p_sum for p in switch_p]
         random_switch_id = np.random.choice(range(1, self.num_switches + 1), p=switch_p)
@@ -435,10 +439,9 @@ class SkynetEnv(gym.Env):
         topology = self.state["topology"]
         routes = self.state["routes"]
         reachability = self.state["reachability"]
-        # assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
 
         # get all necessary information before updating network state
-        flow_id, nxt_switch_id = action
+        (flow_id, nxt_switch_id), next_hops_len, chosen_next_hop_index = action
         done = False
         reward = -1
         src_switch_id, dst_switch_id = self.flow_details[flow_id]
@@ -459,7 +462,7 @@ class SkynetEnv(gym.Env):
                 self.incomplete_flows.remove(flow_id)
                 self.completed_flows.append(flow_id)
                 self.is_game_over = True
-                print "GAME OVER"
+                logging.info("GAME OVER")
             # check if the flow cannot reach the destination
             else:
                 for group in connected_components:
@@ -468,7 +471,7 @@ class SkynetEnv(gym.Env):
                         self.incomplete_flows.remove(flow_id)
                         self.completed_flows.append(flow_id)
                         self.is_game_over = True
-                        print "GAME OVER"
+                        logging.info("GAME OVER")
         
         # update all network state
         # update the switches visited by flow - valid if action is one of next hop link

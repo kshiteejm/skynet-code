@@ -1,9 +1,15 @@
 *.egg-info
 *.pyc
 .idea
+*.pdf
+*.raw
 /logs
 *~
 .ipynb_checkpoints
 skynet-tune/
 *.DS_Store
 explore_skynet.txt
+
+skynet_venv/
+.vscode/
+
