@@ -25,6 +25,6 @@ class Skipgram(Word2Vec):
         kwargs["hs"] = 1
 
         if vocabulary_counts != None:
-          self.vocabulary_counts = vocabulary_counts
+            self.vocabulary_counts = vocabulary_counts
 
         super(Skipgram, self).__init__(**kwargs)

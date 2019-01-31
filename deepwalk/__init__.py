@@ -9,12 +9,12 @@ from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 import logging
 
-import graph
-import walks as serialized_walks
+from . import graph
+from . import walks as serialized_walks
 from gensim.models import Word2Vec
 from .skipgram import Skipgram
 
-from six import text_type as unicode
+from six import text_type as str
 from six import iteritems
 from six.moves import range
 
@@ -56,11 +56,11 @@ def get_deepwalk_representation(adj_matrix, number_walks=NUMBER_WALKS, walk_leng
 
     num_walks = len(G.nodes()) * number_walks
 
-    print("Number of walks: {}".format(num_walks))
+    print(("Number of walks: {}".format(num_walks)))
 
     data_size = num_walks * walk_length
 
-    print("Data size (walks*length): {}".format(data_size))
+    print(("Data size (walks*length): {}".format(data_size)))
 
     if data_size < max_memory_data_size:
         print("Walking...")
@@ -69,7 +69,7 @@ def get_deepwalk_representation(adj_matrix, number_walks=NUMBER_WALKS, walk_leng
         print("Training...")
         model = Word2Vec(walks, size=representation_size, window=window_size, min_count=0, sg=1, hs=1, workers=workers)
     else:
-        print("Data size {} is larger than limit (max-memory-data-size: {}).  Dumping walks to disk.".format(data_size, max_memory_data_size))
+        print(("Data size {} is larger than limit (max-memory-data-size: {}).  Dumping walks to disk.".format(data_size, max_memory_data_size)))
         print("Walking...")
 
         walks_filebase = "filebase.walks"
@@ -82,7 +82,7 @@ def get_deepwalk_representation(adj_matrix, number_walks=NUMBER_WALKS, walk_leng
             vertex_counts = serialized_walks.count_textfiles(walk_files, workers)
         else:
             # use degree distribution for frequency in tree
-            vertex_counts = G.degree(nodes=G.iterkeys())
+            vertex_counts = G.degree(nodes=G.keys())
 
         print("Training...")
         walks_corpus = serialized_walks.WalksCorpus(walk_files)

@@ -28,17 +28,17 @@ class SkynetEnv(gym.Env):
         if topo_style == 'std_dcn':
             self.num_edge_switches = self.topo_scale_factor*self.topo_scale_factor
             self.num_agg_switches = self.topo_scale_factor
-            self.num_core_switches = self.topo_scale_factor/2
+            self.num_core_switches = self.topo_scale_factor // 2
             self.num_switches = self.num_edge_switches + self.num_agg_switches + self.num_core_switches
             self.num_links = self.num_edge_switches + self.num_agg_switches*self.num_core_switches
 
         if topo_style == 'fat_tree':
             self.topo_scale_factor = topo_size
-            self.num_edge_switches = self.topo_scale_factor*self.topo_scale_factor/2
-            self.num_agg_switches = self.topo_scale_factor*self.topo_scale_factor/2
-            self.num_core_switches = (self.topo_scale_factor/2)*(self.topo_scale_factor/2)
+            self.num_edge_switches = (self.topo_scale_factor * self.topo_scale_factor) // 2
+            self.num_agg_switches = (self.topo_scale_factor * self.topo_scale_factor) // 2
+            self.num_core_switches = (self.topo_scale_factor // 2) * (self.topo_scale_factor // 2)
             self.num_switches = self.num_edge_switches + self.num_agg_switches + self.num_core_switches
-            self.num_links = 2*self.num_agg_switches*self.topo_scale_factor/2 + self.num_edge_switches*self.topo_scale_factor/2
+            self.num_links = (2 * self.num_agg_switches * (self.topo_scale_factor // 2)) + (self.num_edge_switches * self.topo_scale_factor) // 2
 
         self.switch_switch_map = {}
         # self.link_switch_map = {}
@@ -108,6 +108,7 @@ class SkynetEnv(gym.Env):
             for dst_switch_id in self.switch_switch_map[src_switch_id]:
                 topology[src_switch_id-1][dst_switch_id-1] = 1
         # initialize routes, reachability
+        print(self.flow_details)
         for flow_id in self.flow_details:
             src_switch_id, dst_switch_id = self.flow_details[flow_id]
             routes[flow_id-1][src_switch_id-1] = 1
@@ -129,12 +130,12 @@ class SkynetEnv(gym.Env):
     # random endpoints for flows in the network
     def _init_flow_details(self, initialize=True, deterministic=False):
         self.completed_flows = []
-        self.incomplete_flows = range(1, self.num_flows + 1)
+        self.incomplete_flows = list(range(1, self.num_flows + 1))
         self.is_game_over = False
         for flow_id in range(1, self.num_flows + 1):
             if deterministic:
                 src_switch_id = (flow_id%self.num_edge_switches) + 1
-                dst_switch_id = ((src_switch_id + self.num_edge_switches/2)%self.num_edge_switches) + 1
+                dst_switch_id = ((src_switch_id + self.num_edge_switches//2)%self.num_edge_switches) + 1
                 self.flow_details[flow_id] = [src_switch_id, dst_switch_id]
                 self.flow_switch_map[flow_id] = [src_switch_id]
             else:
@@ -160,7 +161,7 @@ class SkynetEnv(gym.Env):
             # for edge - agg switches
             while switch_id <= self.num_edge_switches:
                 # agg switch neighbor
-                neighbor_id = (switch_id - 1)/self.topo_scale_factor + 1 + self.num_edge_switches
+                neighbor_id = (switch_id - 1)//self.topo_scale_factor + 1 + self.num_edge_switches
                 self.switch_switch_map[switch_id].append(neighbor_id)
                 self.switch_switch_map[neighbor_id].append(switch_id)
                 switch_id = switch_id + 1
@@ -178,23 +179,23 @@ class SkynetEnv(gym.Env):
             switch_id = 1
             # for edge - agg switches
             while switch_id <= self.num_edge_switches:
-                edge_switches = range(switch_id, switch_id+self.topo_scale_factor/2)
-                agg_switches = range(switch_id+self.num_edge_switches, switch_id+self.num_edge_switches+self.topo_scale_factor/2)
+                edge_switches = list(range(switch_id, switch_id+(self.topo_scale_factor // 2)))
+                agg_switches = list(range(switch_id+self.num_edge_switches, switch_id+self.num_edge_switches+self.topo_scale_factor//2))
                 for edge_switch_id in edge_switches:
                     for agg_switch_id in agg_switches:
                         # print "edge_switch_id: %d, agg_switch_id: %d" % (edge_switch_id, agg_switch_id)
                         self.switch_switch_map[edge_switch_id].append(agg_switch_id)
                         self.switch_switch_map[agg_switch_id].append(edge_switch_id)
-                switch_id = switch_id + self.topo_scale_factor/2
+                switch_id = switch_id + self.topo_scale_factor//2
             # for agg - core switches
-            core_switches = range(self.num_edge_switches+self.num_agg_switches+1, self.num_switches+1)
+            core_switches = list(range(self.num_edge_switches+self.num_agg_switches+1, self.num_switches+1))
             while switch_id <= self.num_edge_switches+self.num_agg_switches:
                 for core_switch_id in core_switches:
-                    agg_switch_id = switch_id + (core_switch_id - core_switches[0])/(self.topo_scale_factor/2)
+                    agg_switch_id = switch_id + (core_switch_id - core_switches[0])//(self.topo_scale_factor//2)
                     # print "agg_switch_id: %d, core_switch_id: %d" % (agg_switch_id, core_switch_id)
                     self.switch_switch_map[agg_switch_id].append(core_switch_id)
                     self.switch_switch_map[core_switch_id].append(agg_switch_id)
-                switch_id = switch_id + self.topo_scale_factor/2
+                switch_id = switch_id + self.topo_scale_factor//2
 
         # print "switch switch map: %s" % str(self.switch_switch_map)
 
@@ -357,18 +358,18 @@ class SkynetEnv(gym.Env):
             logging.info("No Viable Action Exception")
             return (-1 , -1)
         flow_p = [p/flow_p_sum for p in flow_p]
-        random_flow_id = np.random.choice(range(1, self.num_flows + 1), p=flow_p)
+        random_flow_id = np.random.choice(list(range(1, self.num_flows + 1)), p=flow_p)
         switch_p = masked_p[random_flow_id - 1]
         switch_p_sum = np.sum(switch_p)
         if switch_p_sum == 0:
             logging.info("Flow Not Viable Exception")
             return (random_flow_id, -1)
         switch_p = [p/switch_p_sum for p in switch_p]
-        random_switch_id = np.random.choice(range(1, self.num_switches + 1), p=switch_p)
+        random_switch_id = np.random.choice(list(range(1, self.num_switches + 1)), p=switch_p)
         return (random_flow_id, random_switch_id)
 
     def get_random_next_hop(self, p=None):
-        random_next_hop_index = np.random.choice(range(0, len(self.next_hop_details)), p=p)
+        random_next_hop_index = np.random.choice(list(range(0, len(self.next_hop_details))), p=p)
         return self.next_hop_details[random_next_hop_index], len(self.next_hop_details), random_next_hop_index
 
     # # get a next hop link for an incomplete flow adhering to a particular probability distribution
@@ -417,14 +418,14 @@ class SkynetEnv(gym.Env):
         sum_flow_path_len = 0.0
         for flow_id in self.flow_switch_map:
             sum_flow_path_len = sum_flow_path_len + len(self.flow_switch_map[flow_id])
-        return (sum_flow_path_len*1.0)/(self.num_flows*1.0)
+        return (sum_flow_path_len)/(self.num_flows)
 
     def get_path_length_quality(self):
         quality = 0.0
         for flow_id in self.flow_details:
             src_switch_id, dst_switch_id = self.flow_details[flow_id]
-            src_pod_id = (src_switch_id - 1)/(self.topo_scale_factor/2)
-            dst_pod_id = (dst_switch_id - 1)/(self.topo_scale_factor/2)
+            src_pod_id = (src_switch_id - 1)//(self.topo_scale_factor//2)
+            dst_pod_id = (dst_switch_id - 1)//(self.topo_scale_factor//2)
             shortest_path_len = 2
             if src_pod_id == dst_pod_id:
                 shortest_path_len = 3
@@ -550,4 +551,4 @@ class SkynetEnv(gym.Env):
 
     def seed(self, seed=None):
         random.seed(seed)
-        np.random.seed
+        np.random.seed(seed)

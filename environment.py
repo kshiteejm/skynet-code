@@ -67,7 +67,7 @@ class Environment(threading.Thread):
                             eps_steps=eps_steps, verbose=self.verbose, test=self.test, 
                             debug=self.debug)
         self.time_begin = time.time()
-        self.unique_id = Environment.INSTANCE_NUM.next()
+        self.unique_id = next(Environment.INSTANCE_NUM)
         self.num_instances += 1
         self.instance_iter = 0
         logging.debug("Instance Number: %d", self.unique_id)
