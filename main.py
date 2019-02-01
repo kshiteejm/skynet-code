@@ -7,6 +7,8 @@ import itertools
 
 import argparse
 
+import numpy as np
+
 import tensorflow as tf
 import gym
 import gym_skynet
@@ -72,12 +74,10 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
         count = np.sum([o.count for o in opts])
 
         grad = grad / count
-        two_norm_grad = np.sqrt(np.sum(norm_grad ** 2))
+        two_norm_grad = np.sqrt(np.sum(grad ** 2))
         
         if two_norm_grad < 0.01:
             break
-
-
 
     training_instances = 0
     training_deviation = 0.0
