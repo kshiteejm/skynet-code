@@ -134,7 +134,8 @@ class Brain:
         actual_rewards = tf.placeholder(tf.float32, shape=(None,1))
         
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-            print_op = tf.print(Colorize.highlight("Policy Graph: Actual Next Hop Features:"), actual_next_hop_features, ":Shape:", tf.shape(actual_next_hop_features))
+            # print_op = tf.print(Colorize.highlight("Policy Graph: Actual Next Hop Features:"), actual_next_hop_features, ":Shape:", tf.shape(actual_next_hop_features))
+            print_op = tf.print(Colorize.highlight("Policy Graph: Actual Next Hop Features:Shape:"), tf.shape(actual_next_hop_features))
             with tf.control_dependencies([print_op]):
                 avg_next_hop_features = tf.reduce_mean(actual_next_hop_features, axis=1)
         else:
@@ -227,8 +228,6 @@ class Brain:
 
         if len(states) > 5*self.min_batch:
             logging.debug("Optimizer alert! Minimizing batch of %d", len(states))
-        
-        logging.info("==================Training the Network=================")
 
         actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate = self.next_hop_policy_graph
 
@@ -249,12 +248,15 @@ class Brain:
             if next_hop_feature_[0].size == 0:
                 avg_reward = 0.0
             else:
-                avg_reward = self.session.run(avg_rewards_estimate, feed_dict={actual_next_hop_features: next_hop_feature_})
+                avg_reward = self.predict_avg_reward(next_hop_feature_) # self.session.run(avg_rewards_estimate, feed_dict={actual_next_hop_features: next_hop_feature_})
             
             reward = reward + self.gamma_n * avg_reward * np.array([state_masks[i]])
 
+            # with tf.variable_scope("priority_graph"):
+            logging.debug("==================START TRAINING=================")
             self.session.run(minimize, feed_dict={actual_next_hop_features: next_hop_feature, actual_probabilities: action, actual_rewards: reward})
-
+            logging.debug("==================END TRAINING=================")
+        
         # avg_rewards = self.session.run(avg_rewards_estimate, feed_dict={actual_next_hop_features: next_hop_features_})
         # rewards = rewards + self.gamma_n * avg_rewards * state_masks
         # self.session.run(minimize, feed_dict={actual_next_hop_features: next_hop_features, actual_probabilities: actions, actual_rewards: rewards})
@@ -290,6 +292,7 @@ class Brain:
             # print state[2].shape
             # np.save('predict_prob_%d' % self.train_iteration, [l.get_weights() for l in self.model.layers])
             # probabilities, avg_reward = self.model.predict(state)
+            logging.debug("PREDICTING PROB.")
             actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate = self.next_hop_policy_graph
             probabilities = self.session.run(next_hop_probabilities_estimate, feed_dict={actual_next_hop_features: state})
             return probabilities
@@ -298,6 +301,7 @@ class Brain:
         with self.default_graph.as_default():
             # np.save('predict_avg_reward_%d' % self.train_iteration, [l.get_weights() for l in self.model.layers])
             # prob, avg_reward = self.model.predict(state)
+            logging.debug("PREDICTING AVG REWARD.")
             actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate = self.next_hop_policy_graph
             avg_reward = self.session.run(avg_rewards_estimate, feed_dict={actual_next_hop_features: state})
             return avg_reward

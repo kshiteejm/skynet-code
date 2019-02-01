@@ -61,7 +61,7 @@ class Environment(threading.Thread):
         self.stop_signal = False
         self.render = render
         self.env = gym.make(ENV)
-        # self.env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree', deterministic=True)
+        # self.env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree', deterministic=True, node_features=self.node_features)
         self.env.__init__(topo_size=4, num_flows=1, topo_style=TOPOLOGY, node_features=self.node_features)
         self.agent = Agent(self.env, self.brain, eps_start=eps_start, eps_end=eps_end, 
                             eps_steps=eps_steps, verbose=self.verbose, test=self.test, 

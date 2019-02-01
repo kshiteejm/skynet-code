@@ -108,7 +108,7 @@ class SkynetEnv(gym.Env):
             for dst_switch_id in self.switch_switch_map[src_switch_id]:
                 topology[src_switch_id-1][dst_switch_id-1] = 1
         # initialize routes, reachability
-        print(self.flow_details)
+        # print(self.flow_details)
         for flow_id in self.flow_details:
             src_switch_id, dst_switch_id = self.flow_details[flow_id]
             routes[flow_id-1][src_switch_id-1] = 1
