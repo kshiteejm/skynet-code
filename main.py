@@ -69,9 +69,11 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
             o.stop()
         for o in opts:
             o.join()
-
-        grad = np.sum([o.grad for o in opts])
-        count = np.sum([o.count for o in opts])
+        grad = 0.0
+        count = 0
+        for o in opts:
+            grad += o.grad
+            count += o.count
 
         grad = grad / count
         two_norm_grad = np.sqrt(np.sum(grad ** 2))

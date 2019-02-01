@@ -20,7 +20,7 @@ class Optimizer(threading.Thread):
             if self.grad is None:
                 self.grad = np.zeros_like(grad)
             self.grad += grad
-            self.count += count
+            self.count = count
             
     def stop(self):
         self.stop_signal = True
