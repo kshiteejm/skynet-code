@@ -11,7 +11,7 @@ from keras.layers import Input, Concatenate, Flatten, Dense, Reshape
 from keras.models import Model
 
 from constants import GAMMA, LEARNING_RATE, N_STEP_RETURN, MIN_BATCH, LOSS_V, LOSS_ENTROPY, \
-                    TOPO_FEAT, OBSERVATION_SPACE, ACTION_SPACE, DEBUG, Colorize
+                    TOPO_FEAT, OBSERVATION_SPACE, ACTION_SPACE, Colorize
 
 class Brain:
     # train_queue = [ [[], [], []], [], [], [[], [], []], [] ]    # s, a, r, s', s' terminal mask
@@ -20,7 +20,7 @@ class Brain:
 
     def __init__(self, node_features, gamma=GAMMA, n_step_return=N_STEP_RETURN, 
                 learning_rate=LEARNING_RATE, min_batch=MIN_BATCH, loss_v=LOSS_V, 
-                loss_entropy=LOSS_ENTROPY, topo=TOPO_FEAT, debug=DEBUG):
+                loss_entropy=LOSS_ENTROPY, topo=TOPO_FEAT):
         self.train_iteration = 0
 
         self.gamma = gamma
@@ -35,8 +35,7 @@ class Brain:
 
         self.topo = topo
 
-        self.debug = debug
-
+        self.optimizer = None
         self.session = tf.Session()
 
         self.topology_shape = OBSERVATION_SPACE.spaces["topology"].shape
@@ -192,12 +191,14 @@ class Brain:
         loss_value = self.loss_v * tf.square(advantage)    # minimize value error
         entropy = self.loss_entropy * tf.reduce_sum(next_hop_probabilities * tf.log(next_hop_probabilities + 1e-10), axis=1, keepdims=True) # maximize entropy (regularization)
         loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
-        optimizer = tf.train.RMSPropOptimizer(self.learning_rate, decay=.99)
-        minimize = optimizer.minimize(loss_total)
+        self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate, decay=.99)
+        gradients, variables = self.optimizer.compute_gradients(loss_total)
+        minimize = self.optimizer.minimize(loss_total)
 
-        return actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities, avg_rewards
+        return actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities, avg_rewards, gradients, variables
 
     def optimize(self):
+
         if len(self.train_queue[0]) < self.min_batch:
             time.sleep(0)
             return
@@ -229,8 +230,9 @@ class Brain:
         if len(states) > 5*self.min_batch:
             logging.debug("Optimizer alert! Minimizing batch of %d", len(states))
 
-        actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate = self.next_hop_policy_graph
-
+        actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate, gradients, variables = self.next_hop_policy_graph
+        grad = np.zeros_like(gradients.shape.as_list())
+        count = 0
         for i in range(0, len(states)):
             if len(states[i]) == 0:
                 continue
@@ -254,13 +256,15 @@ class Brain:
 
             # with tf.variable_scope("priority_graph"):
             logging.debug("==================START TRAINING=================")
-            self.session.run(minimize, feed_dict={actual_next_hop_features: next_hop_feature, actual_probabilities: action, actual_rewards: reward})
+            m, gradient = self.session.run([minimize, gradients], feed_dict={actual_next_hop_features: next_hop_feature, actual_probabilities: action, actual_rewards: reward})
+            grad += gradient
+            count += len(states[i])
             logging.debug("==================END TRAINING=================")
         
         # avg_rewards = self.session.run(avg_rewards_estimate, feed_dict={actual_next_hop_features: next_hop_features_})
         # rewards = rewards + self.gamma_n * avg_rewards * state_masks
         # self.session.run(minimize, feed_dict={actual_next_hop_features: next_hop_features, actual_probabilities: actions, actual_rewards: rewards})
-
+        return grad, count
 
     def train_push(self, state, action, reward, state_):
         logging.debug("Training Datum: Actual Next Hops Shape: %s, Action: %s, Reward: %s", str(state.shape), str(action), str(reward))

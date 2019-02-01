@@ -32,8 +32,6 @@ TOPOLOGY = 'fat_tree'
 
 TOPO_FEAT = True
 
-DEBUG = True
-VERBOSE = True
 TESTING = False
 
 TRAINING_INSTANCE_LIMIT = 10000 

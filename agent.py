@@ -6,23 +6,21 @@ import random
 
 import numpy as np
 
-from constants import EPS_START, EPS_END, EPS_STEPS, DEBUG, VERBOSE, TESTING
+from constants import EPS_START, EPS_END, EPS_STEPS, TESTING
 
 class Agent:
     FRAMES = itertools.count()
     EXPLOIT = itertools.count()
 
     def __init__(self, env, brain, eps_start=EPS_START, eps_end=EPS_END, 
-                eps_steps=EPS_STEPS, verbose=VERBOSE, test=TESTING, debug=DEBUG):
+                eps_steps=EPS_STEPS, test=TESTING):
         self.env = env
         self.brain = brain
         self.eps_start = eps_start
         self.eps_end   = eps_end
         self.eps_steps = eps_steps
 
-        self.verbose = verbose
         self.test = test
-        self.debug = debug
 
         self.gamma = brain.gamma
         self.gamma_n = brain.gamma_n

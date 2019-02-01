@@ -10,7 +10,7 @@ import gym_skynet
 
 from constants import EPS_START, EPS_END, EPS_STEPS, PER_INSTANCE_LIMIT, \
     THREAD_DELAY, ENV, TRAINING_INSTANCE_LIMIT, TESTING_INSTANCE_LIMIT, \
-    TOPOLOGY, TESTING, VERBOSE, DEBUG
+    TOPOLOGY, TESTING
 
 from agent import Agent
 
@@ -22,7 +22,7 @@ class Environment(threading.Thread):
                 per_instance_limit=PER_INSTANCE_LIMIT, 
                 training_instance_limit=TRAINING_INSTANCE_LIMIT, 
                 testing_instance_limit=TESTING_INSTANCE_LIMIT,
-                verbose=VERBOSE, test=TESTING, debug=DEBUG):
+                test=TESTING):
 
         threading.Thread.__init__(self)
         self.instance_iter = 0
@@ -42,9 +42,7 @@ class Environment(threading.Thread):
         self.training_instance_limit = training_instance_limit
         self.testing_instance_limit = testing_instance_limit
 
-        self.verbose = verbose
         self.test = test
-        self.debug = debug
 
         self.stop_signal = False
 
@@ -64,8 +62,8 @@ class Environment(threading.Thread):
         # self.env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree', deterministic=True, node_features=self.node_features)
         self.env.__init__(topo_size=4, num_flows=1, topo_style=TOPOLOGY, node_features=self.node_features)
         self.agent = Agent(self.env, self.brain, eps_start=eps_start, eps_end=eps_end, 
-                            eps_steps=eps_steps, verbose=self.verbose, test=self.test, 
-                            debug=self.debug)
+                            eps_steps=eps_steps, test=self.test)
+
         self.time_begin = time.time()
         self.unique_id = next(Environment.INSTANCE_NUM)
         self.num_instances += 1

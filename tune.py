@@ -1,7 +1,7 @@
 from __future__ import division, print_function
 import sys
 import numpy as np
-from hyperopt import fmin, tpe, hp, pyll
+from hyperopt import fmin, tpe, hp
 
 import skynet_A3C 
 

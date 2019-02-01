@@ -17,11 +17,11 @@ from brain import Brain
 from environment import Environment
 from optimizer import Optimizer
 
-from constants import ADJ_MAT, DEBUG, EPS_END, EPS_START, EPS_STEPS, \
+from constants import ADJ_MAT, EPS_END, EPS_START, EPS_STEPS, \
                     GAMMA, LEARNING_RATE, LOSS_ENTROPY, LOSS_V, MIN_BATCH, \
                     N_STEP_RETURN, OPTIMIZERS, PER_INSTANCE_LIMIT, TESTING, \
                     TESTING_INSTANCE_LIMIT, THREAD_DELAY, THREADS, TOPO_FEAT, \
-                    TRAINING_INSTANCE_LIMIT, VERBOSE
+                    TRAINING_INSTANCE_LIMIT
 
 brain = None
 
@@ -33,7 +33,7 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
             per_instance_limit=PER_INSTANCE_LIMIT,
             training_instance_limit=TRAINING_INSTANCE_LIMIT,                
             testing_instance_limit=TESTING_INSTANCE_LIMIT,
-            verbose=VERBOSE, test=TESTING, debug=DEBUG):
+            test=TESTING):
 
     global brain
     # TODO fix
@@ -41,7 +41,7 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
 
     brain = Brain(node_features, gamma=gamma, n_step_return=n_step_return, 
                 learning_rate=learning_rate, min_batch=min_batch, loss_v=loss_v, 
-                loss_entropy=loss_entropy, topo=topo_feat, debug=debug)
+                loss_entropy=loss_entropy, topo=topo_feat)
 
     envs = [Environment(node_features, brain, render=False, 
                 eps_start=eps_start, eps_end=eps_end, 
@@ -49,23 +49,35 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
                 per_instance_limit=per_instance_limit, 
                 training_instance_limit=training_instance_limit, 
                 testing_instance_limit=testing_instance_limit,
-                verbose=verbose, test=test, debug=debug) for _ in range(threads)]
+                test=test) for _ in range(threads)]
     
     opts = [Optimizer(brain) for _ in range(optimizers)]
 
-    for o in opts:
-        o.start()
+    while True:
+        for o in opts:
+            o.start()
 
-    for e in envs:
-        e.start()
+        for e in envs:
+            e.start()
 
-    for e in envs:
-        e.join()
+        for e in envs:
+            e.join()
 
-    for o in opts:
-        o.stop()
-    for o in opts:
-        o.join()
+        for o in opts:
+            o.stop()
+        for o in opts:
+            o.join()
+
+        grad = np.sum([o.grad for o in opts])
+        count = np.sum([o.count for o in opts])
+
+        grad = grad / count
+        two_norm_grad = np.sqrt(np.sum(norm_grad ** 2))
+        
+        if two_norm_grad < 0.01:
+            break
+
+
 
     training_instances = 0
     training_deviation = 0.0
@@ -86,7 +98,7 @@ def test_model(node_features,
         per_instance_limit=PER_INSTANCE_LIMIT, 
         training_instance_limit=TRAINING_INSTANCE_LIMIT, 
         testing_instance_limit=TESTING_INSTANCE_LIMIT,
-        verbose=VERBOSE, test=TESTING, debug=DEBUG):
+        test=TESTING):
     test = True
     Environment.INSTANCE_NUM = itertools.count()
 
@@ -96,7 +108,7 @@ def test_model(node_features,
                 per_instance_limit=per_instance_limit, 
                 training_instance_limit=training_instance_limit, 
                 testing_instance_limit=testing_instance_limit,
-                verbose=verbose, test=test, debug=debug) for _ in range(threads)]
+                test=test) for _ in range(threads)]
     test_instances = 0
     test_deviation = 0.0
     for e in envs:
