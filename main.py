@@ -23,7 +23,7 @@ from constants import ADJ_MAT, EPS_END, EPS_START, EPS_STEPS, \
                     GAMMA, LEARNING_RATE, LOSS_ENTROPY, LOSS_V, MIN_BATCH, \
                     N_STEP_RETURN, OPTIMIZERS, PER_INSTANCE_LIMIT, TESTING, \
                     TESTING_INSTANCE_LIMIT, THREAD_DELAY, THREADS, TOPO_FEAT, \
-                    TRAINING_INSTANCE_LIMIT
+                    TRAINING_INSTANCE_LIMIT, GRAD_NORM_STOP
 
 brain = None
 
@@ -72,13 +72,13 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
         grad = 0.0
         count = 0
         for o in opts:
-            grad += o.grad
+            grad += o.grad * o.count
             count += o.count
 
         grad = grad / count
-        two_norm_grad = np.sqrt(np.sum(grad ** 2))
+        two_norm_grad = np.sqrt(np.sum([np.sum(q) for q in grad ** 2]))
         
-        if two_norm_grad < 0.01:
+        if two_norm_grad < GRAD_NORM_STOP:
             break
 
     training_instances = 0

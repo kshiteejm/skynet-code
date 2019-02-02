@@ -43,8 +43,9 @@ OBSERVATION_SPACE = _env.observation_space
 ACTION_SPACE = _env.action_space
 NULL_STATE = _env.get_null_state()
 ADJ_MAT = _env.state["topology"]
-
 del _env
+
+GRAD_NORM_STOP = 0.01
 
 class Colorize:
     RED = '\033[91m'
