@@ -45,7 +45,8 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
                 learning_rate=learning_rate, min_batch=min_batch, loss_v=loss_v, 
                 loss_entropy=loss_entropy, topo=topo_feat)
 
-    envs = [Environment(node_features, brain, render=False, 
+    while True:
+        envs = [Environment(node_features, brain, render=False, 
                 eps_start=eps_start, eps_end=eps_end, 
                 eps_steps=eps_steps, thread_delay=thread_delay,
                 per_instance_limit=per_instance_limit, 
@@ -53,9 +54,8 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
                 testing_instance_limit=testing_instance_limit,
                 test=test) for _ in range(threads)]
     
-    opts = [Optimizer(brain) for _ in range(optimizers)]
+        opts = [Optimizer(brain) for _ in range(optimizers)]
 
-    while True:
         for o in opts:
             o.start()
 

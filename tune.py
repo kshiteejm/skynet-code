@@ -3,7 +3,7 @@ import sys
 import numpy as np
 from hyperopt import fmin, tpe, hp
 
-import skynet_A3C 
+import main
 
 SPACE = {
     'GAMMA': hp.uniform('GAMMA', 0.9, 1.0),
@@ -19,7 +19,7 @@ SPACE = {
 
 
 def run(space):
-    val = skynet_A3C.main(
+    val = main.main(
                 gamma=space['GAMMA'],
                 n_step_return=space['N_STEP_RETURN'],
                 learning_rate=space['LEARNING_RATE'],
