@@ -192,7 +192,9 @@ class Brain:
         entropy = self.loss_entropy * tf.reduce_sum(next_hop_probabilities * tf.log(next_hop_probabilities + 1e-10), axis=1, keepdims=True) # maximize entropy (regularization)
         loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
         self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate, decay=.99)
-        gradients, *variables = self.optimizer.compute_gradients(loss_total)
+        grads_and_vars = self.optimizer.compute_gradients(loss_total)
+        gradients = [gv[0] for gv in grads_and_vars]
+        variables = [gv[1] for gv in grads_and_vars] 
         minimize = self.optimizer.minimize(loss_total)
 
         return actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities, avg_rewards, gradients, variables
@@ -231,7 +233,8 @@ class Brain:
             logging.debug("Optimizer alert! Minimizing batch of %d", len(states))
 
         actual_next_hop_features, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate, gradients, variables = self.next_hop_policy_graph
-        grad = np.zeros_like([g.shape.as_list() for g in gradients], dtype=np.float64)
+        grad = [np.zeros_like(g.shape.as_list(), dtype=np.float64) for g in gradients]
+        print([g.shape.as_list() for g in gradients])
         count = 0
         for i in range(0, len(states)):
             if len(states[i]) == 0:
@@ -257,9 +260,12 @@ class Brain:
             # with tf.variable_scope("priority_graph"):
             logging.debug("==================START TRAINING=================")
             m, gradient = self.session.run([minimize, gradients], feed_dict={actual_next_hop_features: next_hop_feature, actual_probabilities: action, actual_rewards: reward})
-            for i, g in enumerate(gradient):
-                print(g.shape)
-                # grad[i] += g
+            for g in gradient:
+                print(g.shape, [q.shape for q in g], '-'*200)
+                
+            # for i, g in enumerate(gradient):
+            #     print(g[0].shape, g[1].shape, g.shape, type(g), type(grad[i]), grad[i].shape)
+            #     # grad[i] += g
             print()
             count += len(states[i])
             logging.debug("==================END TRAINING=================")
