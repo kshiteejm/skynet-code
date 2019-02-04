@@ -13,8 +13,6 @@ import tensorflow as tf
 import gym
 import gym_skynet
 
-from deepwalk import get_deepwalk_representation
-
 from brain import Brain
 from environment import Environment
 from optimizer import Optimizer
@@ -23,7 +21,7 @@ from constants import ADJ_MAT, EPS_END, EPS_START, EPS_STEPS, \
                     GAMMA, LEARNING_RATE, LOSS_ENTROPY, LOSS_V, MIN_BATCH, \
                     N_STEP_RETURN, OPTIMIZERS, PER_INSTANCE_LIMIT, TESTING, \
                     TESTING_INSTANCE_LIMIT, THREAD_DELAY, THREADS, TOPO_FEAT, \
-                    TRAINING_INSTANCE_LIMIT, GRAD_NORM_STOP
+                    TRAINING_INSTANCE_LIMIT, GRAD_NORM_STOP, NODE_FEATURES
 
 brain = None
 
@@ -38,13 +36,14 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
             test=TESTING):
 
     global brain
-    # TODO fix
-    node_features = get_deepwalk_representation(ADJ_MAT)
+    # TODO fix    
+
+    node_features = NODE_FEATURES
 
     brain = Brain(node_features, gamma=gamma, n_step_return=n_step_return, 
                 learning_rate=learning_rate, min_batch=min_batch, loss_v=loss_v, 
                 loss_entropy=loss_entropy, topo=topo_feat)
-
+    
     while True:
         envs = [Environment(node_features, brain, render=False, 
                 eps_start=eps_start, eps_end=eps_end, 
@@ -67,8 +66,10 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
 
         for o in opts:
             o.stop()
+        
         for o in opts:
             o.join()
+        
         grad = 0.0
         count = 0
         for o in opts:
@@ -92,7 +93,7 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
     logging.info("TRAINING PHASE ENDED.")
     logging.info("AVG TRAIN DEVIATION: %f" % avg_training_deviation)
 
-    test_model(node_features)
+    return test_model(node_features)
 
 def test_model(node_features, 
         eps_start=EPS_START, eps_end=EPS_END, eps_steps=EPS_STEPS,

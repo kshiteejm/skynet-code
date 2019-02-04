@@ -1,6 +1,8 @@
 import logging
 import gym
 import gym_skynet
+from deepwalk import get_deepwalk_representation
+import numpy as np
 
 #-- constants
 ENV = 'Skynet-v0'
@@ -45,7 +47,12 @@ NULL_STATE = _env.get_null_state()
 ADJ_MAT = _env.state["topology"]
 del _env
 
-GRAD_NORM_STOP = 0.01
+NODE_FEATURES = get_deepwalk_representation(ADJ_MAT)
+print(NODE_FEATURES)
+
+np.save("node_features", NODE_FEATURES)
+
+GRAD_NORM_STOP = 0.1
 
 class Colorize:
     RED = '\033[91m'
