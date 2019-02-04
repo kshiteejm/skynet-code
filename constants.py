@@ -48,7 +48,7 @@ ADJ_MAT = _env.state["topology"]
 del _env
 
 NODE_FEATURES = get_deepwalk_representation(ADJ_MAT)
-print(NODE_FEATURES)
+print('NODE_FEATURES\n\n\n', NODE_FEATURES, '\n\n\n')
 
 np.save("node_features", NODE_FEATURES)
 

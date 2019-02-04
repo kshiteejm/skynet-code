@@ -1,4 +1,5 @@
 from __future__ import division, print_function
+import logging
 import sys
 import numpy as np
 from hyperopt import fmin, tpe, hp
@@ -43,6 +44,7 @@ def run(space):
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
     best = fmin(fn=run,
                 space=SPACE,
                 algo=tpe.suggest,
