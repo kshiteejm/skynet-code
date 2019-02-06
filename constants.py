@@ -8,8 +8,8 @@ import numpy as np
 ENV = 'Skynet-v0'
 
 RUN_TIME = 60
-THREADS = 8
-OPTIMIZERS = 2
+THREADS = 1
+OPTIMIZERS = 1
 THREAD_DELAY = 0.001
 
 GAMMA = 0.99

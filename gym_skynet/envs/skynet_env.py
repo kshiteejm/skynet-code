@@ -302,7 +302,43 @@ class SkynetEnv(gym.Env):
             return True
         else:
             return False
-    
+
+    def _djikstra(self, flow_id, visited=False):
+        if visited:
+            switches = set(self.flow_switch_map[flow_id])
+        else:
+            switches = set(range(1, self.num_switches + 1)).difference(self.flow_switch_map[flow_id])
+        _, dst_switch_id = self.flow_details[flow_id]
+        vertices = []
+        dist = {}
+        prev = {}
+        for switch_id in switches:
+            if switch_id == dst_switch_id:
+                dist[switch_id] = 0
+            else:
+                dist[switch_id] = 10000
+            prev[switch_id] = None
+            vertices.append(switch_id)
+
+        while vertices:
+            min_dist_switch_id = None
+            min_dist = 10001
+            for switch_id in vertices:
+                if dist[switch_id] < min_dist:
+                    min_dist_switch_id = switch_id
+                    min_dist = dist[switch_id]
+            
+            vertices.remove(min_dist_switch_id)
+
+            neighbors = self._get_neighbors(flow_id, min_dist_switch_id, visited)
+            for switch_id in neighbors:
+                alt_dist = min_dist + 1
+                if alt_dist < dist[switch_id]:
+                    dist[switch_id] = alt_dist
+                    prev[switch_id] = min_dist_switch_id
+        
+        return dist
+
     def get_next_hop_features(self, p=None):
         routes = self.state["routes"]
         node_features = self.node_features
@@ -314,6 +350,7 @@ class SkynetEnv(gym.Env):
             filtered_next_switch_ids = [switch_id for switch_id in next_switch_ids if routes[flow_id - 1][switch_id - 1] == 0]
             src_switch_id, dst_switch_id = self.flow_details[flow_id]
             connected_components, is_cyclic = self._connected_components(flow_id, visited=False)
+            distances = self._djikstra(flow_id, visited=False)
             reachable_to_dst_next_switch_ids = []
             for group in connected_components:
                 if dst_switch_id in group:
@@ -321,7 +358,8 @@ class SkynetEnv(gym.Env):
                         if switch_id in group:
                             reachable_to_dst_next_switch_ids.append(switch_id)
             for switch_id in reachable_to_dst_next_switch_ids:
-                next_hop_features.append(np.concatenate((node_features[switch_id-1], node_features[recent_switch_id-1], node_features[dst_switch_id-1], node_features[src_switch_id-1])))
+                # next_hop_features.append(np.concatenate((node_features[switch_id-1], node_features[recent_switch_id-1], node_features[dst_switch_id-1], node_features[src_switch_id-1])))
+                next_hop_features.append(np.array([distances[switch_id]]))
                 next_hop_details.append((flow_id, switch_id))
             logging.debug("flow-id: %s, src: %s, dst: %s", flow_id, src_switch_id, dst_switch_id)
             logging.debug("nxt-hop-details: %s", next_hop_details)

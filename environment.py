@@ -96,7 +96,7 @@ class Environment(threading.Thread):
                     self.instance_iter = self.instance_iter + 1
                     instance_deviation = self.env.get_path_length_quality()
                     self.deviation = self.deviation + instance_deviation
-                    logging.debug("TIME: %d, DEVIATION: %f", (time_now - self.time_begin), instance_deviation)
+                    logging.info("TIME: %d, DEVIATION: %f", (time_now - self.time_begin), instance_deviation)
             
             if not self.test:
                 self.agent.train(state["next_hop_features"], action, reward, state_["next_hop_features"])

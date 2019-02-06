@@ -44,7 +44,8 @@ class Brain:
         self.reachability_shape = OBSERVATION_SPACE.spaces["reachability"].shape
         self.action_shape_height = int(ACTION_SPACE.high[0])
         self.action_shape_width = int(ACTION_SPACE.high[1])
-        self.next_hop_feature_shape = list([node_features[0].shape[0]*4])
+        # self.next_hop_feature_shape = list([node_features[0].shape[0]*4])
+        self.next_hop_feature_shape = list([1])
 
         # self.next_hop_priority_graph = self._build_next_hop_priority_graph()
         self.next_hop_policy_graph = self._build_next_hop_policy_graph()

@@ -73,7 +73,7 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
         
         for o in opts:
             o.join()
-        break
+        # break
         grad = 0.0
         count = 0
         for o in opts:
