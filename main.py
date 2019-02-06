@@ -38,7 +38,11 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
     global brain
     # TODO fix    
 
+    delete()
+
     node_features = NODE_FEATURES
+
+    Environment.INSTANCE_NUM = itertools.count()
 
     brain = Brain(node_features, gamma=gamma, n_step_return=n_step_return, 
                 learning_rate=learning_rate, min_batch=min_batch, loss_v=loss_v, 
@@ -69,7 +73,7 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
         
         for o in opts:
             o.join()
-        
+        break
         grad = 0.0
         count = 0
         for o in opts:
@@ -128,9 +132,12 @@ def test_model(node_features,
     return avg_test_deviation
 
 def delete():
-    brain.session.close()
-    tf.reset_default_graph()
-    del brain
+    global brain
+
+    if brain is not None:
+        brain.session.close()
+        tf.reset_default_graph()
+        del brain
 
 if __name__ == '__main__':
     # logger = logging.getLogger('root')

@@ -26,7 +26,7 @@ LEARNING_RATE = 5e-2
 LOSS_V = .5         # v loss coefficient
 LOSS_ENTROPY = .01  # entropy coefficient
 
-PER_INSTANCE_LIMIT = 100
+PER_INSTANCE_LIMIT = 10
 
 MODEL_VERSION = 1   # state-dependent
 
@@ -36,7 +36,7 @@ TOPO_FEAT = True
 
 TESTING = False
 
-TRAINING_INSTANCE_LIMIT = 10000 
+TRAINING_INSTANCE_LIMIT = 10000
 TESTING_INSTANCE_LIMIT = 1000
 
 _env = gym.make(ENV)

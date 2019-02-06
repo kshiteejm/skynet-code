@@ -10,7 +10,7 @@ SPACE = {
     'GAMMA': hp.uniform('GAMMA', 0.9, 1.0),
     'N_STEP_RETURN': hp.choice('N_STEP_RETURN', list(range(1,13))),
     'LEARNING_RATE': hp.loguniform('LEARNING_RATE', np.log(1e-3), np.log(0.1)),
-    'MIN_BATCH': hp.choice('MIN_BATCH', [32, 64, 128, 256]),
+    'MIN_BATCH': hp.choice('MIN_BATCH', [32, 64, 128, 256, 1024]),
     # 'LOSS_V': hp.uniform('LOSS_V', ),
     # 'LOSS_ENTROPY': hp.uniform('LOSS_ENTROPY', ),
     'EPS_START': hp.uniform('EPS_START', 0.3, 0.7),
