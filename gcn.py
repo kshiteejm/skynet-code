@@ -37,6 +37,7 @@ class GCN(tf.keras.layers.Layer):
         self.num_inputs = int(input_shape[-1])
         self.kernel = tf.Variable("kernel", shape=(self.num_inputs, self.num_outputs))
         self.bias = tf.Variable("bias", shape=(self.num_outputs,))
+        self.print_op = tf.Print([self.kernel, self.bias])
 
     def call(self, adj_mat, features=None):
         pass
