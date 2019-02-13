@@ -51,47 +51,45 @@ class Brain:
 
         self.session.run(tf.global_variables_initializer())
         self.default_graph = tf.get_default_graph()
-
-    def _build_model(self):
-        if self.topo:
-            topology_input = Input(shape=self.topology_shape)
-        routes_input = Input(shape=self.routes_shape)
-        reachability_input = Input(shape=self.reachability_shape)
-
-        if self.topo:
-            merged_input = Concatenate(axis=1)([topology_input, routes_input, reachability_input])
-        else:
-            merged_input = Concatenate(axis=1)([routes_input, reachability_input])
-        flattened_input = Flatten()(merged_input)
-        dense_layer_1 = Dense(256, activation='relu')(flattened_input)
-        dense_layer_2 = Dense(32, activation='relu')(dense_layer_1)
-
-        _out_actions = Dense(self.action_shape_height*self.action_shape_width, activation='softmax')(dense_layer_2)
-        out_actions = Reshape((self.action_shape_height, self.action_shape_width))(_out_actions)
-        out_value = Dense(1, activation='linear')(dense_layer_2)
-
-        if self.topo:
-            model = Model(inputs=[topology_input, routes_input, reachability_input], outputs=[out_actions, out_value])
-        else:
-            model = Model(inputs=[routes_input, reachability_input], outputs=[out_actions, out_value])
-
-        model._make_predict_function()  # have to initialize before threading
+    
+    def _build_next_hop_feature_graph(self, node_features, neighbor_features):
+        summed_ngbr_node_features = tf.reduce_sum(neighbor_features)
         
-        logging.debug(model.summary())
+        with tf.variable_scope("featurize_ngbrs", reuse=True):
+            dense_ngbr_layer = tf.layers.dense(summed_ngbr_node_features, 16, activation=tf.nn.relu, name="dense_featurize_ngbrs")
+            dense_node_layer = tf.layers.dense(node_features, 16, activation=tf.nn.relu, name="dense_featurize_node")
+            output_node_feature = tf.reduce_sum([dense_node_layer, dense_ngbr_layer])
 
-        return model
-    
-    def _build_next_hop_priority_graph_old(self):
-        with tf.Graph().as_default() as next_hop_priority_graph:
-            next_hop_feature_shape = list(self.next_hop_feature_shape)
-            next_hop_feature_shape.insert(0, None)
-            next_hop_feature = tf.placeholder(tf.float32, shape=next_hop_feature_shape, name="feature")
-            dense_layer = tf.layers.dense(next_hop_feature, 16, activation=tf.nn.relu)
-            out_priority = tf.layers.dense(dense_layer, 1, name="priority") # linear activation
-            sess = tf.Session()
-            sess.run(tf.global_variables_initializer())
-        return next_hop_priority_graph
-    
+        return output_node_feature
+
+    def _get_next_hop_features(self, index, out_features, features, topo):
+        zero = tf.constant(0, dtype=tf.float32)
+        ngbr_info = tf.gather(topo, index)
+        node_features = tf.gather(features, index)
+        ngbr_indices = tf.where(tf.not_equal(ngbr_info, zero))
+        ngbr_features = tf.gather(features, ngbr_indices)
+        new_node_feature = self._build_next_hop_feature_graph(node_features, ngbr_features)
+        return [tf.add(index, 1), tf.concat([out_features, [new_node_feature]], 0), features, topo]
+
+    def _build_featurize_one_round_graph(self, round_num, all_node_features, topology):        
+        i = tf.constant(0)
+        l = tf.Variable([])
+        cond = lambda index, out_features, features, topo: tf.less(idx, tf.shape(topology)[0])
+        _, new_node_features, _, _ = tf.while_loop(cond, self._get_next_hop_features, [i, l, all_node_features, topology])
+        return [tf.add(round_num, 1), new_node_features, topology]
+
+    def _build_featurize_graph(self):
+        all_nodes_features_shape = list(self.next_hop_feature_shape)
+        all_nodes_features_shape = all_nodes_features_shape.insert(0, None)
+        all_node_features = tf.placeholder(tf.float32, shape=all_nodes_features_shape)
+        rounds = tf.placeholder(tf.float32, shape=(1,1))
+        topology = tf.placeholder(tf.float32, shape=(tf.shape(all_node_features)[-1], tf.shape(all_node_features)[-1]))
+        i = tf.constant(0)
+        cond = lambda latest_round_num, latest_features, latest_topology: tf.less(latest_round_num, rounds)
+        # body = lambda latest_round_num, latest_features, latest_topology: self._build_graph_featurize_one_round_graph(latest_round_num, latest_features, latest_topology)
+        _, out_node_features, _ = tf.while_loop(cond, self._build_featurize_one_round_graph, [i, all_node_features, topology])
+        return out_node_features
+
     def _build_next_hop_priority_graph(self, inputs):
         with tf.variable_scope("priority_graph"): 
             if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
