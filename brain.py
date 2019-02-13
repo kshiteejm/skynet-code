@@ -74,7 +74,7 @@ class Brain:
     def _build_featurize_one_round_graph(self, round_num, all_node_features, topology):        
         i = tf.constant(0)
         l = tf.Variable([])
-        cond = lambda index, out_features, features, topo: tf.less(idx, tf.shape(topology)[0])
+        cond = lambda index, out_features, features, topo: tf.less(i, tf.shape(topology)[0])
         _, new_node_features, _, _ = tf.while_loop(cond, self._get_next_hop_features, [i, l, all_node_features, topology])
         return [tf.add(round_num, 1), new_node_features, topology]
 
