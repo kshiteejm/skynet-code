@@ -55,27 +55,43 @@ class SkynetEnv(gym.Env):
         self.incomplete_flows = []
         self._init_flow_details(deterministic=deterministic)
 
-        # node (per-switch) features
-        self.node_features = node_features
-        self.next_hop_features = np.array([])
-        self.next_hop_details = []
+        # isolation (vertex isolation for now) policies
+        self.num_isolation_policies = self.num_flows / 4
+        self.isolation = np.zeros((self.num_flows, self.num_flows))
+        self._init_isolation_policies(deterministic=deterministic)
+
+        # visited, can_visit
+        self.raw_node_feature_size = 2 
+
+        # # node (per-switch) features
+        # self.node_features = node_features
+        # self.next_hop_features = np.array([])
+        # self.next_hop_details = []
+
+        # node (per-switch, per-node) features
+        self.node_features = np.zeros((self.num_flows, self.num_switches, self.raw_node_feature_size))
         
         # observation space:
         self.observation_space = spaces.Dict(dict(
-            topology=spaces.Box(low=0, high=1, shape=(self.num_switches, self.num_switches), dtype=np.uint8),
-            routes=spaces.Box(low=0, high=1, shape=(self.num_flows, self.num_switches), dtype=np.uint8),
-            reachability=spaces.Box(low=0, high=1, shape=(self.num_flows, self.num_switches), dtype=np.uint8)
+            topology=spaces.Box(low=0, high=1, shape=(self.num_switches, self.num_switches)),
+            routes=spaces.Box(low=0, high=1, shape=(self.num_flows, self.num_switches)),
+            reachability=spaces.Box(low=0, high=1, shape=(self.num_flows, self.num_switches)),
+            isolation=spaces.Box(low=0, high=1, shape=(self.num_flows, self.num_flows)),
+            node_features=spaces.Box(low=0, high=1, shape=(self.num_flows, self.num_switches, self.raw_node_feature_size))
         ))
 
         # action space:
-        self.action_space = spaces.Box(low=np.array([1, 1]), high=np.array([self.num_flows, self.num_switches]), dtype=np.uint8)
+        self.action_space = spaces.Box(low=np.array([1, 1]), high=np.array([self.num_flows, self.num_switches]))
 
         # state:
         self.state = dict(
-            topology=np.zeros((self.num_switches, self.num_switches), dtype=np.uint8),
-            routes=np.zeros((self.num_flows, self.num_switches), dtype=np.uint8),
-            reachability=np.zeros((self.num_flows, self.num_switches), dtype=np.uint8),
-            next_hop_features=np.array([])
+            topology=np.zeros((self.num_switches, self.num_switches)),
+            routes=np.zeros((self.num_flows, self.num_switches)),
+            reachability=np.zeros((self.num_flows, self.num_switches)),
+            isolation=np.zeros((self.num_flows, self.num_flows)),
+            node_features=np.zeros((self.num_flows, self.num_switches, self.raw_feature_size)),
+            # next_hop_features=np.array([]),
+            next_hop_indices=np.array([])
         )
 
         self._init_state()
@@ -93,39 +109,60 @@ class SkynetEnv(gym.Env):
 
     def _init_state(self):
         self.state = dict(
-            topology=np.zeros((self.num_switches, self.num_switches), dtype=np.uint8),
-            routes=np.zeros((self.num_flows, self.num_switches), dtype=np.uint8),
-            reachability=np.zeros((self.num_flows, self.num_switches), dtype=np.uint8),
-            next_hop_features=np.array([])
+            topology=np.zeros((self.num_switches, self.num_switches)),
+            routes=np.zeros((self.num_flows, self.num_switches)),
+            reachability=np.zeros((self.num_flows, self.num_switches)),
+            isolation=np.zeros((self.num_flows, self.num_flows)),
+            node_features=np.zeros((self.num_flows, self.num_switches, self.raw_feature_size)),
+            # next_hop_features=np.array([]),
+            next_hop_indices=np.array([])
         )
         
         topology = self.state["topology"]
         routes = self.state["routes"]
         reachability = self.state["reachability"]
+        node_features = self.state["node_features"]
+        next_hop_indices = self.state["next_hop_indices"]
 
         # initialize topology
         for src_switch_id in self.switch_switch_map:
             for dst_switch_id in self.switch_switch_map[src_switch_id]:
                 topology[src_switch_id-1][dst_switch_id-1] = 1
+        
         # initialize routes, reachability
+        # each flow route contains source switch to begin with
         # print(self.flow_details)
         for flow_id in self.flow_details:
             src_switch_id, dst_switch_id = self.flow_details[flow_id]
             routes[flow_id-1][src_switch_id-1] = 1
             reachability[flow_id-1][src_switch_id-1] = 1
             reachability[flow_id-1][dst_switch_id-1] = 1
-        # update next_hop_features, next_hop_details
-        if self.node_features is not None:
-            next_hop_features, next_hop_details = self.get_next_hop_features()
-            self.next_hop_features = next_hop_features
-            self.state["next_hop_features"] = next_hop_features
-            self.next_hop_details = next_hop_details
+        
+        # propagate isolation
+        self.state["isolation"] = np.array(self.isolation)
+        
+        # update per-flow raw node features
+        self.node_features = self._generate_node_features()
+        node_features = np.array(self.node_features)
+
+        # update next hop indices
+        next_hop_indices = self.get_next_hop_indices()
+
+        # # update next_hop_features, next_hop_details
+        # if self.node_features is not None:
+        #     next_hop_features, next_hop_details = self.get_next_hop_features()
+        #     self.next_hop_features = next_hop_features
+        #     self.state["next_hop_features"] = next_hop_features
+        #     self.next_hop_details = next_hop_details
     
     def get_null_state(self):
         topology = self.state["topology"]
         routes = self.state["routes"]
         reachability = self.state["reachability"]
-        return dict(topology=np.array(topology), routes=np.zeros(routes.shape), reachability=np.zeros(reachability.shape), next_hop_features=np.array([]))
+        isolation = self.state["isolation"]
+        node_features = self.state["node_features"]
+        # next_hop_indices = self.state["next_hop_indices"]
+        return dict(topology=np.array(topology), routes=np.zeros(routes.shape), reachability=np.zeros(reachability.shape), isolation=np.zeros(isolation.shape), node_features=np.zeros(node_features.shape), next_hop_indices=np.array([]))
     
     # random endpoints for flows in the network
     def _init_flow_details(self, initialize=True, deterministic=False):
@@ -150,6 +187,22 @@ class SkynetEnv(gym.Env):
                     src_switch_id, dst_switch_id = self.flow_details[flow_id]
                     self.flow_switch_map[flow_id] = [src_switch_id]
         # print "flow details: %s" % str(self.flow_details)
+    
+    def _init_isolation_policies(self, initialize=True, deterministic=False):
+        for i in range(self.num_isolation_policies):
+            if deterministic:
+                first_flow_id = (i%self.num_flows) + 1
+                second_flow_id = ((i + self.num_flows//2)%self.num_flows) + 1
+                self.isolation[first_flow_id-1][second_flow_id-1] = 1
+                self.isolation[second_flow_id-1][first_flow_id-1] = 1
+            else:
+                if initialize:
+                    first_flow_id = random.randint(1, self.num_flows)
+                    second_flow_id = random.randint(1, self.num_flows)
+                    while second_flow_id == first_flow_id:
+                        second_flow_id = random.randint(1, self.num_flows)
+                    self.isolation[first_flow_id-1][second_flow_id-1] = 1
+                    self.isolation[second_flow_id-1][first_flow_id-1] = 1
 
     # initialization of map from switch to switch neighbors
     def _init_switch_switch_map(self, topo_style='fat_tree'):
@@ -221,6 +274,34 @@ class SkynetEnv(gym.Env):
     #     for link_id in range(1, self.num_links + 1):
     #         for switch_id in self.link_switch_map[link_id]:
     #             self.switch_link_map[switch_id].append(link_id)
+
+    def _generate_node_features(self):
+        routes = self.state["routes"]
+        node_features = np.zeros((self.num_flows, self.num_switches, self.raw_node_feature_size))
+        # all traversed switches for each flow are marked as visited and cannot visit
+        for flow_id in range(1, self.num_flows+1):
+            flow_route = routes[flow_id-1]
+            for switch_id in range(1, len(flow_route)+1):
+                node_features[flow_id-1][switch_id-1][0] = flow_route[switch_id-1]
+                node_features[flow_id-1][switch_id-1][1] = flow_route[switch_id-1]
+        # isolation related node featurization
+        for flow_id_1 in range(1, self.num_flows+1):
+            for flow_id_2 in range(1, self.num_flows+1):
+                if self.isolation[flow_id_1-1][flow_id_2-1] == 1:
+                    routes_1 = routes[flow_id_1-1]
+                    routes_2 = routes[flow_id_2-1]
+                    src_switch_id_1, dst_switch_id_1 = self.flow_details[flow_id]
+                    src_switch_id_2, dst_switch_id_2 = self.flow_details[flow_id]
+                    # flow 1 cannot visit flow 2 switches and vice versa except their src/dst
+                    for switch_id in range(1, len(routes_2)+1):
+                        if switch_id == src_switch_id_2 or switch_id == dst_switch_id_2:
+                            continue
+                        node_features[flow_id_1-1][switch_id-1] = routes_2[switch_id-1]
+                    for switch_id in range(1, len(routes_1)+1):
+                        if switch_id == src_switch_id_1 or switch_id == dst_switch_id_1:
+                            continue
+                        node_features[flow_id_2-1][switch_id-1] = routes_1[switch_id-1]
+        return node_features
 
     def _get_neighbors(self, flow_id, root_switch_id, visited=True):
         routes = self.state["routes"]
@@ -303,7 +384,28 @@ class SkynetEnv(gym.Env):
         else:
             return False
     
-    def get_next_hop_features(self, p=None):
+    def get_next_hop_indices(self):
+        next_hop_indices = []
+        for i in range(len(self.num_flows)):
+            next_hop_indices.append([])
+        routes = self.state["routes"]
+        for flow_id in self.incomplete_flows:
+            recent_switch_id = self.flow_switch_map[flow_id][-1]
+            next_switch_ids = self.switch_switch_map[recent_switch_id]
+            filtered_next_switch_ids = [switch_id for switch_id in next_switch_ids if routes[flow_id - 1][switch_id - 1] == 0]
+            _, dst_switch_id = self.flow_details[flow_id]
+            connected_components, _ = self._connected_components(flow_id, visited=False)
+            reachable_to_dst_next_switch_ids = []
+            for group in connected_components:
+                if dst_switch_id in group:
+                    for switch_id in filtered_next_switch_ids:
+                        if switch_id in group:
+                            reachable_to_dst_next_switch_ids.append(switch_id)
+            for switch_id in reachable_to_dst_next_switch_ids:
+                next_hop_indices[flow_id-1].append(switch_id-1)
+        return np.array(next_hop_indices)
+
+    def get_next_hop_features(self):
         routes = self.state["routes"]
         node_features = self.node_features
         next_hop_features = []
@@ -435,11 +537,28 @@ class SkynetEnv(gym.Env):
             flow_path_len = len(self.flow_switch_map[flow_id])
             quality = quality + flow_path_len - shortest_path_len
         return quality
+    
+    def is_isolation_violated(self, flow_id_1, nxt_switch_id):
+        violated = False
+        routes = self.state["routes"]
+        for flow_id_2 in range(1, self.num_flows+1):
+            if self.isolation[flow_id_1-1][flow_id_2-1] == 1:
+                src_switch_id_2, dst_switch_id_2 = self.flow_details[flow_id_2]
+                if nxt_switch_id == src_switch_id_2 or nxt_switch_id == dst_switch_id_2:
+                    continue
+                routes_2 = routes[flow_id_2-1]
+                if routes_2[nxt_switch_id-1] == 1:
+                    violated = True
+                    break
+        return violated
 
     def step(self, action):
         topology = self.state["topology"]
         routes = self.state["routes"]
         reachability = self.state["reachability"]
+        isolation = self.state["isolation"]
+        node_features = self.state["node_features"]
+        next_hop_indices = self.state["next_hop_indices"]
 
         # get all necessary information before updating network state
         (flow_id, nxt_switch_id), next_hops_len, chosen_next_hop_index = action
@@ -448,46 +567,56 @@ class SkynetEnv(gym.Env):
         src_switch_id, dst_switch_id = self.flow_details[flow_id]
         connected_components, is_cyclic = self._connected_components(flow_id, visited=False)
 
-        # get rewards and check game over conditions
-        # check if the flow reaches desired destination
-        if nxt_switch_id == dst_switch_id:
-            # reward = POS_INF
+        if self.is_isolation_violated(flow_id, nxt_switch_id) == True:
+            reward = NEG_INF
             self.incomplete_flows.remove(flow_id)
             self.completed_flows.append(flow_id)
+            self.is_game_over = True
+            logging.info("GAME OVER")
         else:
-            # # check if the flow reaches wrong edge switch or there is a cycle
-            # if self._is_edge_switch(nxt_switch_id) or nxt_switch_id in self.flow_switch_map[flow_id]:
-            # check if next switch causes a cycle
-            if nxt_switch_id in self.flow_switch_map[flow_id]:
-                reward = NEG_INF
+            # get rewards and check game over conditions
+            # check if the flow reaches desired destination
+            if nxt_switch_id == dst_switch_id:
+                # reward = POS_INF
                 self.incomplete_flows.remove(flow_id)
                 self.completed_flows.append(flow_id)
-                self.is_game_over = True
-                logging.info("GAME OVER")
-            # check if the flow cannot reach the destination
             else:
-                for group in connected_components:
-                    if dst_switch_id in group and nxt_switch_id not in group:
-                        reward = NEG_INF
-                        self.incomplete_flows.remove(flow_id)
-                        self.completed_flows.append(flow_id)
-                        self.is_game_over = True
-                        logging.info("GAME OVER")
+                # # check if the flow reaches wrong edge switch or there is a cycle
+                # if self._is_edge_switch(nxt_switch_id) or nxt_switch_id in self.flow_switch_map[flow_id]:
+                # check if next switch causes a cycle
+                if nxt_switch_id in self.flow_switch_map[flow_id]:
+                    reward = NEG_INF
+                    self.incomplete_flows.remove(flow_id)
+                    self.completed_flows.append(flow_id)
+                    self.is_game_over = True
+                    logging.info("GAME OVER")
+                # check if the flow cannot reach the destination
+                else:
+                    for group in connected_components:
+                        if dst_switch_id in group and nxt_switch_id not in group:
+                            reward = NEG_INF
+                            self.incomplete_flows.remove(flow_id)
+                            self.completed_flows.append(flow_id)
+                            self.is_game_over = True
+                            logging.info("GAME OVER")
         
         # update all network state
         # update the switches visited by flow - valid if action is one of next hop link
         self.flow_switch_map[flow_id].append(nxt_switch_id)
         # if flow_id in self.completed_flows or state[flow_id-1][link_id-1] == 1: # this should not be happening
         routes[flow_id-1][nxt_switch_id-1] = 1
-        next_hop_features, next_hop_details = self.get_next_hop_features()
-        self.next_hop_features = next_hop_features
-        self.state["next_hop_features"] = next_hop_features
-        self.next_hop_details = next_hop_details
+        self.node_features = self._generate_node_features()
+        node_features = np.array(self.node_features)
+        # next_hop_features, next_hop_details = self.get_next_hop_features()
+        # self.next_hop_features = next_hop_features
+        # self.state["next_hop_features"] = next_hop_features
+        # self.next_hop_details = next_hop_details
+        next_hop_indices = self.get_next_hop_indices()
 
         if len(self.completed_flows) == self.num_flows or self.is_game_over:
             done = True
         
-        return dict(topology=np.array(topology), routes=np.array(routes), reachability=np.array(reachability), next_hop_features=np.array(next_hop_features)), reward, done, {}
+        return dict(topology=np.array(topology), routes=np.array(routes), reachability=np.array(reachability), isolation=np.array(isolation), node_features=np.array(node_features), next_hop_indices=np.array(next_hop_indices)), reward, done, {}
 
     # def step(self, action):
     #     # assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
@@ -546,8 +675,11 @@ class SkynetEnv(gym.Env):
         topology = self.state["topology"]
         routes = self.state["routes"]
         reachability = self.state["reachability"]
-        next_hop_features = self.state["next_hop_features"]
-        return dict(topology=np.array(topology), routes=np.array(routes), reachability=np.array(reachability), next_hop_features=np.array(next_hop_features))
+        isolation = self.state["isolation"]
+        # next_hop_features = self.state["next_hop_features"]
+        node_features = self.state["node_features"]
+        next_hop_indices = self.state["next_hop_indices"]
+        return dict(topology=np.array(topology), routes=np.array(routes), reachability=np.array(reachability), isolation=np.array(isolation), node_features=np.array(node_features), next_hop_indices=np.array(next_hop_indices))
 
     def seed(self, seed=None):
         random.seed(seed)
