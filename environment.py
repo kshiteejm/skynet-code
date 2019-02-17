@@ -17,7 +17,8 @@ from agent import Agent
 class Environment(threading.Thread):
     INSTANCE_NUM = itertools.count()
 
-    def __init__(self, node_features, brain, render=False, eps_start=EPS_START,
+    def __init__(self, brain, num_flows, num_switches, topo,
+                node_features=None, render=False, eps_start=EPS_START,
                 eps_end=EPS_END, eps_steps=EPS_STEPS, thread_delay=THREAD_DELAY,
                 per_instance_limit=PER_INSTANCE_LIMIT, 
                 training_instance_limit=TRAINING_INSTANCE_LIMIT, 
@@ -31,6 +32,10 @@ class Environment(threading.Thread):
 
         self.node_features = node_features
         self.brain = brain
+
+        self.num_flows = num_flows 
+        self.num_switches = num_switches 
+        self.topo = topo
         
         self.eps_start = eps_start
         self.eps_end = eps_end
@@ -59,10 +64,11 @@ class Environment(threading.Thread):
         self.stop_signal = False
         self.render = render
         self.env = gym.make(ENV)
-        # self.env.__init__(topo_size=4, num_flows=1, topo_style='fat_tree', deterministic=True, node_features=self.node_features)
-        self.env.__init__(topo_size=4, num_flows=1, topo_style=TOPOLOGY, node_features=self.node_features)
+        self.env.__init__(topo_size=self.num_switches, num_flows=self.num_flows, topo_style=self.topo)
         self.agent = Agent(self.env, self.brain, eps_start=eps_start, eps_end=eps_end, 
                             eps_steps=eps_steps, test=self.test)
+        
+        self.topology = self.env.state["topology"]
 
         self.time_begin = time.time()
         self.unique_id = next(Environment.INSTANCE_NUM)
@@ -132,3 +138,9 @@ class Environment(threading.Thread):
 
     def stop(self):
         self.stop_signal = True
+
+    def getState(self):
+        return self.env.state
+
+    def getNodeFeatures(self):
+        return self.env.state["node_features"]        

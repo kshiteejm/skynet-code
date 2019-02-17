@@ -30,32 +30,34 @@ PER_INSTANCE_LIMIT = 10
 
 MODEL_VERSION = 1   # state-dependent
 
-TOPOLOGY = 'fat_tree'
+# TOPOLOGY = 'fat_tree'
 
-TOPO_FEAT = True
+# TOPO_FEAT = True
 
 TESTING = False
 
 TRAINING_INSTANCE_LIMIT = 10000
 TESTING_INSTANCE_LIMIT = 1000
 
-_env = gym.make(ENV)
-_env.__init__(topo_size=4, num_flows=1, topo_style=TOPOLOGY, deterministic=True)
-OBSERVATION_SPACE = _env.observation_space
-ACTION_SPACE = _env.action_space
-NULL_STATE = _env.get_null_state()
-ADJ_MAT = _env.state["topology"]
-del _env
+# _env = gym.make(ENV)
+# _env.__init__(topo_size=4, num_flows=1, topo_style=TOPOLOGY, deterministic=True)
+# OBSERVATION_SPACE = _env.observation_space
+# ACTION_SPACE = _env.action_space
+# NULL_STATE = _env.get_null_state()
+# ADJ_MAT = _env.state["topology"]
+# del _env
 
-NODE_FEATURES = get_deepwalk_representation(ADJ_MAT)
-print('NODE_FEATURES\n\n\n', NODE_FEATURES, '\n\n\n')
+# NODE_FEATURES = get_deepwalk_representation(ADJ_MAT)
+# print('NODE_FEATURES\n\n\n', NODE_FEATURES, '\n\n\n')
 
-np.save("node_features", NODE_FEATURES)
+# np.save("node_features", NODE_FEATURES)
 
 GRAD_NORM_STOP = 0.1
 
 NODE_FEATURE_SIZE = 16
 GNN_ROUNDS = 4
+NET_WIDTH = 16
+POLICY_FEATURE_SIZE = 16
 
 class Colorize:
     RED = '\033[91m'

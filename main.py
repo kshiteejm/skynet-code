@@ -109,7 +109,7 @@ def test_model(node_features,
     test = True
     Environment.INSTANCE_NUM = itertools.count()
 
-    envs = [Environment(node_features, brain, render=False, 
+    envs = [Environment(brain, render=False, node_features=None,
                 eps_start=eps_start, eps_end=eps_end, 
                 eps_steps=eps_steps, thread_delay=thread_delay,
                 per_instance_limit=per_instance_limit, 
