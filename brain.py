@@ -105,13 +105,19 @@ class Brain:
 
             return inputs, out_priority
 
-    def _build_next_hop_policy_graph(self, topology, num_flows, next_hop_indices):
+    def _build_next_hop_policy_graph(self, state):
+
+        topology = state["topology"]
+        num_flows = state["num_flows"]
+        next_hop_indices = state["next_hop_indices"]
+        
         raw_node_feat_list = []
         node_feat_list = []
         policy_feat_list = []
         prob_list = []
         reward_list = []
         next_hop_feature_list = []
+        
         for flow_id in range(num_flows):
             raw_node_features, node_features = self._build_featurize_graph(topology)
             raw_node_feat_list.append(raw_node_features)
