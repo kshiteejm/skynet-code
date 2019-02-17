@@ -54,6 +54,9 @@ np.save("node_features", NODE_FEATURES)
 
 GRAD_NORM_STOP = 0.1
 
+NODE_FEATURE_SIZE = 16
+GNN_ROUNDS = 4
+
 class Colorize:
     RED = '\033[91m'
     GREEN = '\033[92m'
