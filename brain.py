@@ -135,9 +135,9 @@ class Brain:
             per_flow_next_hop_features = tf.gather(node_features, next_hop_indices)
             next_hop_feature_list.append(per_flow_next_hop_features)
 
-        next_hop_features = tf.convert_to_tensor(next_hop_feature_list)
-        actual_probabilities = tf.convert_to_tensor(prob_list)
-        actual_rewards = tf.convert_to_tensor(reward_list)
+        next_hop_features = tf.concat(next_hop_feature_list, axis=0)
+        actual_probabilities = tf.concat(prob_list, axis=0)
+        actual_rewards = tf.concat(reward_list, axis=0)
 
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
             print_op = tf.print(Colorize.highlight("Policy Graph: Actual Next Hop Features:Shape:"), tf.shape(next_hop_features))
