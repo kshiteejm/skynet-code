@@ -30,7 +30,11 @@ PER_INSTANCE_LIMIT = 10
 
 MODEL_VERSION = 1   # state-dependent
 
-# TOPOLOGY = 'fat_tree'
+TOPOLOGIES = ['fat_tree']
+MIN_GRAPH_SIZE = 5
+MAX_GRAPH_SIZE = 60
+MIN_FLOWS = 1
+MAX_FLOWS = 100
 
 # TOPO_FEAT = True
 

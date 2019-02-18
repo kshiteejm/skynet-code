@@ -17,18 +17,24 @@ from brain import Brain
 from environment import Environment
 from optimizer import Optimizer
 
-from constants import ADJ_MAT, EPS_END, EPS_START, EPS_STEPS, \
+from constants import EPS_END, EPS_START, EPS_STEPS, \
                     GAMMA, LEARNING_RATE, LOSS_ENTROPY, LOSS_V, MIN_BATCH, \
-                    N_STEP_RETURN, OPTIMIZERS, PER_INSTANCE_LIMIT, TESTING, \
-                    TESTING_INSTANCE_LIMIT, THREAD_DELAY, THREADS, TOPO_FEAT, \
-                    TRAINING_INSTANCE_LIMIT, GRAD_NORM_STOP, NODE_FEATURES
+                    N_STEP_RETURN, GNN_ROUNDS, POLICY_FEATURE_SIZE, \
+                    NODE_FEATURE_SIZE, NET_WIDTH, \
+                    OPTIMIZERS, PER_INSTANCE_LIMIT, TESTING, \
+                    TESTING_INSTANCE_LIMIT, THREAD_DELAY, THREADS, \
+                    TRAINING_INSTANCE_LIMIT, \
+                    MIN_GRAPH_SIZE, MAX_GRAPH_SIZE, MIN_FLOWS, MAX_FLOWS, \
+                    GRAD_NORM_STOP, TOPOLOGIES
 
 brain = None
 
 def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE, 
             min_batch=MIN_BATCH, loss_v=LOSS_V, loss_entropy=LOSS_ENTROPY,
-            eps_start=EPS_START, eps_end=EPS_END, eps_steps=EPS_STEPS,
-            topo_feat=TOPO_FEAT, thread_delay=THREAD_DELAY,
+            gnn_rounds=GNN_ROUNDS, node_feature_size=NODE_FEATURE_SIZE,
+            policy_feature_size=POLICY_FEATURE_SIZE, net_width=NET_WIDTH,
+            eps_start=EPS_START, eps_end=EPS_END, eps_steps=EPS_STEPS, 
+            thread_delay=THREAD_DELAY,
             threads=THREADS, optimizers=OPTIMIZERS,
             per_instance_limit=PER_INSTANCE_LIMIT,
             training_instance_limit=TRAINING_INSTANCE_LIMIT,                
@@ -40,23 +46,35 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
 
     delete()
 
-    node_features = NODE_FEATURES
-
     Environment.INSTANCE_NUM = itertools.count()
 
-    brain = Brain(node_features, gamma=gamma, n_step_return=n_step_return, 
+    brain = Brain(gamma=gamma, n_step_return=n_step_return, 
                 learning_rate=learning_rate, min_batch=min_batch, loss_v=loss_v, 
-                loss_entropy=loss_entropy, topo=topo_feat)
+                loss_entropy=loss_entropy, node_feature_size=node_feature_size,
+                gnn_rounds=gnn_rounds, policy_feature_size=policy_feature_size,
+                net_width=net_width)
     
     while True:
-        envs = [Environment(node_features, brain, render=False, 
-                eps_start=eps_start, eps_end=eps_end, 
-                eps_steps=eps_steps, thread_delay=thread_delay,
-                per_instance_limit=per_instance_limit, 
-                training_instance_limit=training_instance_limit, 
-                testing_instance_limit=testing_instance_limit,
-                test=test) for _ in range(threads)]
-    
+
+        envs = []
+        for _ in range(threads):
+            topo = np.random.choice(len(TOPOLOGIES))
+            topo = TOPOLOGIES[topo]
+            
+            num_switches = np.random.choice(np.arange(MIN_GRAPH_SIZE, MAX_GRAPH_SIZE))
+            
+            num_flows = min((num_switches ** 2) / 2, MAX_FLOWS)
+            num_flows = np.random.choice(np.arange(MIN_FLOWS, num_flows))
+
+            env = Environment(brain, num_flows, num_switches, topo, 
+                            eps_start=eps_start, eps_end=eps_end,
+                            eps_steps=eps_steps, thread_delay=thread_delay,
+                            per_instance_limit=per_instance_limit, 
+                            training_instance_limit=training_instance_limit, 
+                            testing_instance_limit=testing_instance_limit,
+                            test=test)
+            envs.append(env)
+
         opts = [Optimizer(brain) for _ in range(optimizers)]
 
         for o in opts:
@@ -73,7 +91,9 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
         
         for o in opts:
             o.join()
-        break
+        
+        break # ??
+        
         grad = 0.0
         count = 0
         for o in opts:
@@ -97,25 +117,38 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
     logging.info("TRAINING PHASE ENDED.")
     logging.info("AVG TRAIN DEVIATION: %f" % avg_training_deviation)
 
-    return test_model(node_features)
+    return test_model(threads=threads, eps_start=eps_start, eps_end=eps_end,
+                        eps_steps=eps_steps, thread_delay=thread_delay,
+                        per_instance_limit=per_instance_limit, 
+                        training_instance_limit=training_instance_limit, 
+                        testing_instance_limit=testing_instance_limit)
 
-def test_model(node_features, 
-        eps_start=EPS_START, eps_end=EPS_END, eps_steps=EPS_STEPS,
-        thread_delay=THREAD_DELAY, threads=THREADS,
-        per_instance_limit=PER_INSTANCE_LIMIT, 
-        training_instance_limit=TRAINING_INSTANCE_LIMIT, 
-        testing_instance_limit=TESTING_INSTANCE_LIMIT,
-        test=TESTING):
+def test_model(threads=THREADS, eps_start=EPS_START, eps_end=EPS_END,
+                eps_steps=EPS_STEPS, thread_delay=THREAD_DELAY,
+                per_instance_limit=PER_INSTANCE_LIMIT, 
+                training_instance_limit=TRAINING_INSTANCE_LIMIT, 
+                testing_instance_limit=TESTING_INSTANCE_LIMIT):
     test = True
+    
     Environment.INSTANCE_NUM = itertools.count()
 
-    envs = [Environment(brain, render=False, node_features=None,
-                eps_start=eps_start, eps_end=eps_end, 
-                eps_steps=eps_steps, thread_delay=thread_delay,
-                per_instance_limit=per_instance_limit, 
-                training_instance_limit=training_instance_limit, 
-                testing_instance_limit=testing_instance_limit,
-                test=test) for _ in range(threads)]
+    envs = []
+    for _ in range(threads):
+        topo = np.random.choice(len(TOPOLOGIES))
+        topo = TOPOLOGIES[topo]
+        num_switches = np.random.choice(np.arange(MIN_GRAPH_SIZE, MAX_GRAPH_SIZE))
+        num_flows = np.inf
+        while 2 * num_flows > num_switches ** 2:
+            num_flows = np.random.choice(MAX_FLOWS)
+
+        env = Environment(brain, num_flows, num_switches, topo, 
+                        eps_start=eps_start, eps_end=eps_end,
+                        eps_steps=eps_steps, thread_delay=thread_delay,
+                        per_instance_limit=per_instance_limit, 
+                        training_instance_limit=training_instance_limit, 
+                        testing_instance_limit=testing_instance_limit,
+                        test=test)
+        envs.append(env)
     test_instances = 0
     test_deviation = 0.0
     for e in envs:
