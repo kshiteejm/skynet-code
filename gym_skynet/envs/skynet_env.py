@@ -70,6 +70,7 @@ class SkynetEnv(gym.Env):
 
         # node (per-switch, per-node) features
         self.raw_node_feature_list = np.zeros((self.num_flows, self.num_switches, self.raw_node_feature_size))
+        self.next_hop_indices = np.array([])
         
         # observation space:
         self.observation_space = spaces.Dict(dict(
@@ -89,7 +90,7 @@ class SkynetEnv(gym.Env):
             routes=np.zeros((self.num_flows, self.num_switches)),
             reachability=np.zeros((self.num_flows, self.num_switches)),
             isolation=np.zeros((self.num_flows, self.num_flows)),
-            raw_node_feature_list=np.zeros((self.num_flows, self.num_switches, self.raw_feature_size)),
+            raw_node_feature_list=np.zeros((self.num_flows, self.num_switches, self.raw_node_feature_size)),
             # next_hop_features=np.array([]),
             next_hop_indices=np.array([])
         )
@@ -113,7 +114,7 @@ class SkynetEnv(gym.Env):
             routes=np.zeros((self.num_flows, self.num_switches)),
             reachability=np.zeros((self.num_flows, self.num_switches)),
             isolation=np.zeros((self.num_flows, self.num_flows)),
-            raw_node_feature_list=np.zeros((self.num_flows, self.num_switches, self.raw_feature_size)),
+            raw_node_feature_list=np.zeros((self.num_flows, self.num_switches, self.raw_node_feature_size)),
             # next_hop_features=np.array([]),
             next_hop_indices=np.array([])
         )
@@ -146,7 +147,8 @@ class SkynetEnv(gym.Env):
         raw_node_feature_list = np.array(self.raw_node_feature_list)
 
         # update next hop indices
-        next_hop_indices = self.get_next_hop_indices()
+        self.next_hop_indices = self.get_next_hop_indices()
+        next_hop_indices = np.array(self.next_hop_indices)
 
         # # update next_hop_features, next_hop_details
         # if self.raw_node_feature_list is not None:
@@ -471,8 +473,12 @@ class SkynetEnv(gym.Env):
         return (random_flow_id, random_switch_id)
 
     def get_random_next_hop(self, p=None):
-        random_next_hop_index = np.random.choice(list(range(0, len(self.next_hop_details))), p=p)
-        return self.next_hop_details[random_next_hop_index], len(self.next_hop_details), random_next_hop_index
+        next_hop_details = []
+        for flow_id in range(1, len(self.next_hop_indices)+1):
+            for switch_id in self.next_hop_indices[flow_id-1]:
+                next_hop_details.append((flow_id, switch_id))
+        random_next_hop_index = np.random.choice(list(range(0, len(next_hop_details))), p=p)
+        return next_hop_details[random_next_hop_index], len(next_hop_details), random_next_hop_index
 
     # # get a next hop link for an incomplete flow adhering to a particular probability distribution
     # def get_random_action(self, p=None):
@@ -611,7 +617,8 @@ class SkynetEnv(gym.Env):
         # self.next_hop_features = next_hop_features
         # self.state["next_hop_features"] = next_hop_features
         # self.next_hop_details = next_hop_details
-        next_hop_indices = self.get_next_hop_indices()
+        self.next_hop_indices = self.get_next_hop_indices()
+        next_hop_indices = np.array(self.get_next_hop_indices())
 
         if len(self.completed_flows) == self.num_flows or self.is_game_over:
             done = True

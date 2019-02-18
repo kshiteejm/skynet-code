@@ -6,11 +6,10 @@ import itertools
 import threading
 
 import gym
-import gym_skynet
 
 from constants import EPS_START, EPS_END, EPS_STEPS, PER_INSTANCE_LIMIT, \
     THREAD_DELAY, ENV, TRAINING_INSTANCE_LIMIT, TESTING_INSTANCE_LIMIT, \
-    TOPOLOGY, TESTING
+    TESTING
 
 from agent import Agent
 
@@ -89,7 +88,7 @@ class Environment(threading.Thread):
             action, is_rand = self.agent.act(state)
             state_, reward, done, info = self.env.step(action)
             
-            logging.debug("Next Hop Features Shape:  %s", str(state["next_hop_features"].shape))
+            logging.debug("Raw Node Features List Shape:  %s", str(state["raw_node_features_list"].shape))
             logging.debug("Action: %s, Random: %s", str(action), str(is_rand))
             logging.debug("Reward: %s", str(reward))
             
@@ -105,7 +104,7 @@ class Environment(threading.Thread):
                     logging.debug("TIME: %d, DEVIATION: %f", (time_now - self.time_begin), instance_deviation)
             
             if not self.test:
-                self.agent.train(state["next_hop_features"], action, reward, state_["next_hop_features"])
+                self.agent.train(state, action, reward, state_)
 
             state = state_
 
