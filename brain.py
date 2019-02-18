@@ -8,8 +8,6 @@ import sys
 import numpy as np
 import tensorflow as tf
 # from tensorflow.python import debug as tf_debug
-from keras.layers import Input, Concatenate, Flatten, Dense, Reshape
-from keras.models import Model
 
 from constants import GAMMA, LEARNING_RATE, N_STEP_RETURN, MIN_BATCH, LOSS_V, LOSS_ENTROPY, \
                     NODE_FEATURE_SIZE, GNN_ROUNDS, POLICY_FEATURE_SIZE, NET_WIDTH, Colorize
