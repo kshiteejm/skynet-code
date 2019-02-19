@@ -63,6 +63,33 @@ GNN_ROUNDS = 4
 NET_WIDTH = 16
 POLICY_FEATURE_SIZE = 16
 
+ISOLATION_PROJ = None
+FLOW_ID_PROJ = None
+REACHABILITY_PROJ = None
+
+if os.path.isfile('isolation_proj.npy'):
+    ISOLATION_PROJ = np.load('isolation_proj.npy')
+else:
+    ISOLATION_PROJ = np.random.normal(0.0, 1.0, (POLICY_FEATURE_SIZE, MAX_FLOWS))
+    np.save('isolation_proj.npy', ISOLATION_PROJ)
+
+if os.path.isfile('flow_id_proj.npy'):
+    FLOW_ID_PROJ = np.load('flow_id_proj.npy')
+else:
+    FLOW_ID_PROJ = np.random.normal(0.0, 1.0, (POLICY_FEATURE_SIZE, MAX_FLOWS))
+    np.save('flow_id_proj.npy', FLOW_ID_PROJ)
+
+if os.path.isfile('reachability_proj.npy'):
+    REACHABILITY_PROJ = np.load('reachability_proj.npy')
+else:
+    REACHABILITY_PROJ = np.random.normal(0.0, 1.0, (POLICY_FEATURE_SIZE, MAX_FLOWS))
+    np.save('reachability_proj.npy', REACHABILITY_PROJ)
+if os.path.isfile('isolation_proj.npy'):
+    ISOLATION_PROJ = np.load('isolation_proj.npy')
+else:
+    POLICY_PROJ = np.random.normal(0.0, 1.0, ())
+
+
 class Colorize:
     RED = '\033[91m'
     GREEN = '\033[92m'

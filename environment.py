@@ -9,7 +9,7 @@ import gym
 
 from constants import EPS_START, EPS_END, EPS_STEPS, PER_INSTANCE_LIMIT, \
     THREAD_DELAY, ENV, TRAINING_INSTANCE_LIMIT, TESTING_INSTANCE_LIMIT, \
-    TESTING
+    TESTING, ISOLATION_PROJ, REACHABILITY_PROJ, FLOW_ID_PROJ
 
 from agent import Agent
 
@@ -142,4 +142,21 @@ class Environment(threading.Thread):
         return self.env.state
 
     def getNodeFeatures(self):
-        return self.env.state["raw_node_feature_list"]        
+        return self.env.state["raw_node_feature_list"]
+
+    def getPolicyFeatures(self, state, flow_id):
+        num_flows = state['isolation'].shape[0]
+
+        isolation = state['isolation'][flow_id]
+        isolation = ISOLATION_PROJ[:, :num_flows] @ isolation
+
+        reachability = state['reachability'][flow_id]
+        reachability = REACHABILITY_PROJ[:, :num_flows] @ reachability
+
+        id_one_hot = np.zeros(num_flows, dtype=np.float32)
+        id_one_hot[flow_id] = 1.0
+        id_one_hot = FLOW_ID_PROJ[:, :num_flows] @ id_one_hot
+
+        policy_features = np.array([isolation, reachability, id_one_hot]).flatten()
+        
+        return policy_features
