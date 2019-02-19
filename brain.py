@@ -69,7 +69,7 @@ class Brain:
                     ngbr_node_features = tf.boolean_mask(all_node_features, edge_list, axis=0)
                 # else:
                 #     ngbr_node_features = tf.boolean_mask(all_node_features, edge_list, axis=0)
-                summed_ngbr_node_features = tf.reduce_sum(ngbr_node_features)
+                summed_ngbr_node_features = tf.reduce_sum(ngbr_node_features, axis=0)
                 node_features = input_node_features[node]
                 # Assumption: This will cause the thetas to be reused over multiple rounds, and multiple data points
                 with tf.variable_scope("featurize_ngbrs", reuse=True):
@@ -298,17 +298,17 @@ class Brain:
             return probabilities, avg_reward
 
     def predict_prob(self, state):
-        with self.default_graph.as_default():
+        # with self.default_graph.as_default():
             # print state[0].shape
             # print state[1].shape
             # print state[2].shape
             # np.save('predict_prob_%d' % self.train_iteration, [l.get_weights() for l in self.model.layers])
             # probabilities, avg_reward = self.model.predict(state)
-            logging.debug("PREDICTING PROB.")
-            logging.debug("Shape of Raw Node Feature List: %s", state["raw_node_feature_list"].shape)
-            raw_node_feature_list, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate, _ = self._build_next_hop_policy_graph(state)
-            probabilities = self.session.run(next_hop_probabilities_estimate, feed_dict={i: d for i, d in zip(raw_node_feature_list, state["raw_node_feature_list"])})
-            return probabilities
+        logging.debug("PREDICTING PROB.")
+        logging.debug("Shape of Raw Node Feature List: %s", state["raw_node_feature_list"].shape)
+        raw_node_feature_list, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate, _ = self._build_next_hop_policy_graph(state)
+        probabilities = self.session.run(next_hop_probabilities_estimate, feed_dict={i: d for i, d in zip(raw_node_feature_list, state["raw_node_feature_list"])})
+        return probabilities
 
     def predict_avg_reward(self, state):
         with self.default_graph.as_default():
