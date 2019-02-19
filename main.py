@@ -57,7 +57,7 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
     while True:
 
         envs = []
-        for _ in range(threads):
+        for thr in range(threads):
             topo = np.random.choice(len(TOPOLOGIES))
             topo = TOPOLOGIES[topo]
             
@@ -66,7 +66,7 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
             num_flows = min((num_switches ** 2) / 2, MAX_FLOWS)
             num_flows = np.random.choice(np.arange(MIN_FLOWS, num_flows))
 
-            logging.debug('TOPO: %s, NUM_FLOWS: %d, NUM_SWITCHES: %d' % topo, num_flows, num_switches)
+            logging.debug('THREAD %d: TOPO: %s, NUM_FLOWS: %d, NUM_SWITCHES: %d' % (thr, topo, num_flows, num_switches))
 
             env = Environment(brain, num_flows, num_switches, topo, 
                             eps_start=eps_start, eps_end=eps_end,
