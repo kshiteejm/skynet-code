@@ -119,7 +119,7 @@ class Brain:
         raw_node_feat_list = []
         node_feat_list = []
         next_hop_feature_list = []
-        policy_feature_list = []
+        priority_feature_list = []
 
         for flow_id in range(num_flows):
             raw_node_features, node_features = self._build_featurize_graph(topology, raw_node_feature_size)
@@ -128,16 +128,18 @@ class Brain:
 
             per_flow_next_hop_features = tf.gather(node_features, next_hop_indices[flow_id])
             next_hop_feature_list.append(per_flow_next_hop_features)
-            policy_features = Environment.getPolicyFeatures(state, flow_id)
-            policy_feature_list.append(policy_features)
+            policy_features = Environment.getPolicyFeatures(state, flow_id)[np.newaxis,:]
+            policy_features = tf.convert_to_tensor(policy_features)
+            priority_features = tf.concat([next_hop_features, policy_features], axis=1)
+            priority_feature_list.append(priority_features)
 
+        priority_features = tf.concat(priority_feature_list, axis=0)
         next_hop_features = tf.concat(next_hop_feature_list, axis=0)
         actual_probabilities = tf.placeholder(tf.float32, shape=(None,))
         actual_rewards = tf.placeholder(tf.float32, shape=(None,))
         policy_features = np.array(policy_feature_list)
         logging.debug('Policy Feature shape: %s', (policy_features.shape,))
-        policy_features = tf.convert_to_tensor(policy_features)
-        priority_features = tf.concat([next_hop_features, policy_features], axis=1)
+        
         
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
             print_op1 = tf.print(Colorize.highlight("Policy Graph: Actual Next Hop Features:Shape:"), tf.shape(next_hop_features))
