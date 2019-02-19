@@ -128,9 +128,10 @@ class Brain:
 
             per_flow_next_hop_features = tf.gather(node_features, next_hop_indices[flow_id])
             next_hop_feature_list.append(per_flow_next_hop_features)
+
             policy_features = Environment.getPolicyFeatures(state, flow_id)[np.newaxis,:]
             policy_features = tf.convert_to_tensor(policy_features)
-            priority_features = tf.concat([next_hop_features, policy_features], axis=1)
+            priority_features = tf.map_fn(lambda x: tf.concat([x, policy_features], axis=1), per_flow_next_hop_features)
             priority_feature_list.append(priority_features)
 
         priority_features = tf.concat(priority_feature_list, axis=0)
