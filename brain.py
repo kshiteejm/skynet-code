@@ -61,8 +61,9 @@ class Brain:
         
         all_node_features = tf.zeros((tf.shape(input_node_features)[0], topology.shape[0], self.node_feature_size))
         for _ in range(self.gnn_rounds):
+            next_node_features = []
             for node, edge_list in enumerate(topology):
-                logging.debug("Reached Here.")
+                # logging.debug("Reached Here.")
                 ngbr_node_features = tf.map_fn(lambda t: tf.boolean_mask(t, edge_list, axis=0), all_node_features)
                 summed_ngbr_node_features = tf.map_fn(lambda t: tf.reduce_sum(t, axis=0), ngbr_node_features)
                 node_features = tf.map_fn(lambda t: t[node], input_node_features)
@@ -70,8 +71,9 @@ class Brain:
                 with tf.variable_scope("featurize_ngbrs", reuse=tf.AUTO_REUSE):
                     dense_ngbr_layer = tf.layers.dense(summed_ngbr_node_features, self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_ngbrs")
                     dense_node_layer = tf.layers.dense(node_features, self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_node")
-                    all_node_features = tf.map_fn(lambda t: tf.reduce_sum(t, axis=0), tf.stack([dense_ngbr_layer, dense_node_layer], axis=1))
-                    print(all_node_features)
+                    updated_node_feature = tf.map_fn(lambda t: tf.reduce_sum(t, axis=0), tf.stack([dense_ngbr_layer, dense_node_layer], axis=1))
+                    next_node_features.append(updated_node_feature)
+            all_node_features = tf.stack(next_node_features, axis=1)
         return input_node_features, all_node_features
 
     def _build_next_hop_priority_graph(self, node_features, policy_features):
