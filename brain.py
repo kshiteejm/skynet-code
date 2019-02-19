@@ -9,6 +9,7 @@ import numpy as np
 import tensorflow as tf
 # from tensorflow.python import debug as tf_debug
 
+from environment import Environment
 from constants import GAMMA, LEARNING_RATE, N_STEP_RETURN, MIN_BATCH, LOSS_V, LOSS_ENTROPY, \
                     NODE_FEATURE_SIZE, GNN_ROUNDS, POLICY_FEATURE_SIZE, NET_WIDTH, Colorize
 
@@ -45,7 +46,7 @@ class Brain:
         
         self.node_feature_size = node_feature_size 
         self.gnn_rounds = gnn_rounds
-        self.policy_feature_size = policy_feature_size
+        self.policy_feature_size = 3 * policy_feature_size
         self.feature_size = self.policy_feature_size + self.node_feature_size
 
         self.net_width = net_width
@@ -76,8 +77,8 @@ class Brain:
             all_node_features = tf.stack(next_node_features, axis=1)
         return input_node_features, all_node_features
 
-    def _build_next_hop_priority_graph(self, node_features, policy_features):
-        inputs = tf.concat([node_features, policy_features], axis=0)
+    def _build_next_hop_priority_graph(self, inputs):
+        # inputs = tf.concat([node_features, policy_features], axis=0)
         with tf.variable_scope("priority_graph"): 
             if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
                 print_op = tf.print(Colorize.highlight("Priority Graph: Input Hops:"), inputs, ":Shape:", tf.shape(inputs))
@@ -114,11 +115,11 @@ class Brain:
         num_flows = state["isolation"].shape[0]
         next_hop_indices = state["next_hop_indices"]
         raw_node_feature_size = state["raw_node_feature_list"].shape[-1]
-        policy_features = np.array([state["reachability"].flatten(), state["isolation"].flatten()]).flatten()
         
         raw_node_feat_list = []
         node_feat_list = []
         next_hop_feature_list = []
+        policy_feature_list = []
 
         for flow_id in range(num_flows):
             raw_node_features, node_features = self._build_featurize_graph(topology, raw_node_feature_size)
@@ -127,11 +128,17 @@ class Brain:
 
             per_flow_next_hop_features = tf.gather(node_features, next_hop_indices[flow_id])
             next_hop_feature_list.append(per_flow_next_hop_features)
+            policy_features = Environment.getPolicyFeatures(state, flow_id)
+            policy_feature_list.append(policy_features)
 
         next_hop_features = tf.concat(next_hop_feature_list, axis=0)
         actual_probabilities = tf.placeholder(tf.float32, shape=(None,))
         actual_rewards = tf.placeholder(tf.float32, shape=(None,))
+        policy_features = np.array(policy_feature_list)
+        logging.debug('Policy Feature shape: %s', (policy_features.shape,))
         policy_features = tf.convert_to_tensor(policy_features)
+        priority_features = tf.concat([next_hop_features, policy_features], axis=1)
+        
 
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
             print_op = tf.print(Colorize.highlight("Policy Graph: Actual Next Hop Features:Shape:"), tf.shape(next_hop_features))
@@ -160,10 +167,10 @@ class Brain:
             print_op = tf.print(Colorize.highlight("Policy Graph: Average Rewards Estimate:"), avg_rewards, ":Shape:", tf.shape(avg_rewards))
             with tf.control_dependencies([print_op]):
                 with tf.variable_scope("priority_graph", reuse=tf.AUTO_REUSE):
-                    priorities = tf.map_fn(lambda x: self._build_next_hop_priority_graph(x, policy_features), next_hop_features)
+                    priorities = tf.map_fn(lambda x: self._build_next_hop_priority_graph(x), priority_features)
         else:
             with tf.variable_scope("priority_graph", reuse=tf.AUTO_REUSE):
-                priorities = tf.map_fn(lambda x: self._build_next_hop_priority_graph(x, policy_features), next_hop_features)
+                priorities = tf.map_fn(lambda x: self._build_next_hop_priority_graph(x), priority_features)
         
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
             print_op = tf.print(Colorize.highlight("Policy Graph: Priorities Estimate:"), priorities, ":Shape:", tf.shape(priorities))

@@ -5,6 +5,7 @@ import time
 import itertools
 import threading
 
+import numpy as np
 import gym
 
 from constants import EPS_START, EPS_END, EPS_STEPS, PER_INSTANCE_LIMIT, \
@@ -144,7 +145,8 @@ class Environment(threading.Thread):
     def getNodeFeatures(self):
         return self.env.state["raw_node_feature_list"]
 
-    def getPolicyFeatures(self, state, flow_id):
+    @staticmethod
+    def getPolicyFeatures(state, flow_id):
         num_flows = state['isolation'].shape[0]
 
         isolation = state['isolation'][flow_id]
@@ -158,5 +160,5 @@ class Environment(threading.Thread):
         id_one_hot = FLOW_ID_PROJ[:, :num_flows] @ id_one_hot
 
         policy_features = np.array([isolation, reachability, id_one_hot]).flatten()
-        
+
         return policy_features

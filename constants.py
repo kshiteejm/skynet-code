@@ -1,4 +1,5 @@
 import logging
+import os
 import gym
 import gym_skynet
 from deepwalk import get_deepwalk_representation
