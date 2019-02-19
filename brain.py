@@ -138,7 +138,7 @@ class Brain:
         next_hop_features = tf.concat(next_hop_feature_list, axis=0)
         actual_probabilities = tf.placeholder(tf.float32, shape=(None,))
         actual_rewards = tf.placeholder(tf.float32, shape=(None,))
-        policy_features = np.array(policy_feature_list)
+        
         logging.debug('Policy Feature shape: %s', (policy_features.shape,))
         
         
