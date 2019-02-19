@@ -15,6 +15,11 @@ import numpy as np
 
 NEG_INF = -100.0
 POS_INF = 100.0
+MIN_GRAPH_SIZE = 5
+MAX_GRAPH_SIZE = 60
+MAX_NUM_SWITCHES = 60*60*5//4
+MIN_FLOWS = 1
+MAX_FLOWS = 100
 
 class SkynetEnv(gym.Env):
 
@@ -57,7 +62,7 @@ class SkynetEnv(gym.Env):
 
         # isolation (vertex isolation for now) policies
         self.num_isolation_policies = int(self.num_flows / 4)
-        self.isolation = np.zeros((self.num_flows, self.num_flows))
+        self.isolation = np.zeros((MAX_FLOWS, MAX_FLOWS))
         self._init_isolation_policies(deterministic=deterministic)
 
         # visited, can_visit
@@ -88,8 +93,8 @@ class SkynetEnv(gym.Env):
         self.state = dict(
             topology=np.zeros((self.num_switches, self.num_switches)),
             routes=np.zeros((self.num_flows, self.num_switches)),
-            reachability=np.zeros((self.num_flows, self.num_switches)),
-            isolation=np.zeros((self.num_flows, self.num_flows)),
+            reachability=np.zeros((MAX_FLOWS, MAX_NUM_SWITCHES)),
+            isolation=np.zeros((MAX_FLOWS, MAX_FLOWS)),
             raw_node_feature_list=np.zeros((self.num_flows, self.num_switches, self.raw_node_feature_size)),
             # next_hop_features=np.array([]),
             next_hop_indices=np.array([])
@@ -112,8 +117,8 @@ class SkynetEnv(gym.Env):
         self.state = dict(
             topology=np.zeros((self.num_switches, self.num_switches)),
             routes=np.zeros((self.num_flows, self.num_switches)),
-            reachability=np.zeros((self.num_flows, self.num_switches)),
-            isolation=np.zeros((self.num_flows, self.num_flows)),
+            reachability=np.zeros((MAX_FLOWS, MAX_NUM_SWITCHES)),
+            isolation=np.zeros((MAX_FLOWS, MAX_FLOWS)),
             raw_node_feature_list=np.zeros((self.num_flows, self.num_switches, self.raw_node_feature_size)),
             # next_hop_features=np.array([]),
             next_hop_indices=np.array([])
@@ -124,6 +129,7 @@ class SkynetEnv(gym.Env):
         reachability = self.state["reachability"]
         raw_node_feature_list = self.state["raw_node_feature_list"]
         next_hop_indices = self.state["next_hop_indices"]
+        isolation = self.state["isolation"]
 
         # initialize topology
         for src_switch_id in self.switch_switch_map:
@@ -140,7 +146,7 @@ class SkynetEnv(gym.Env):
             reachability[flow_id-1][dst_switch_id-1] = 1
         
         # propagate isolation
-        self.state["isolation"] = np.array(self.isolation)
+        isolation = np.array(self.isolation)
         
         # update per-flow raw node features
         self.raw_node_feature_list = self._generate_raw_node_feature_list()

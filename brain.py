@@ -58,12 +58,19 @@ class Brain:
     # featurize for a single flow graph
     def _build_featurize_graph(self, topology, raw_node_feature_size):
         input_node_features = tf.placeholder(tf.float32, shape=(topology.shape[0], raw_node_feature_size))
-        all_node_features = input_node_features
+        
+        all_node_features = tf.zeros((topology.shape[0], self.node_feature_size))
         for _ in range(self.gnn_rounds):
             for node, edge_list in enumerate(topology):
-                ngbr_node_features = tf.boolean_mask(all_node_features[node], edge_list, axis=0)
+                logging.debug("Reached Here.")
+                # if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+                print_op = tf.print(Colorize.highlight("Featurize Graph: Input_Node_Features: "), all_node_features, ":Shape:", tf.shape(all_node_features))
+                with tf.control_dependencies([print_op]):
+                    ngbr_node_features = tf.boolean_mask(all_node_features, edge_list, axis=0)
+                # else:
+                #     ngbr_node_features = tf.boolean_mask(all_node_features, edge_list, axis=0)
                 summed_ngbr_node_features = tf.reduce_sum(ngbr_node_features)
-                node_features = all_node_features[node]
+                node_features = input_node_features[node]
                 # Assumption: This will cause the thetas to be reused over multiple rounds, and multiple data points
                 with tf.variable_scope("featurize_ngbrs", reuse=True):
                     dense_ngbr_layer = tf.layers.dense(summed_ngbr_node_features, self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_ngbrs")
@@ -109,7 +116,7 @@ class Brain:
         num_flows = state["isolation"].shape[0]
         next_hop_indices = state["next_hop_indices"]
         raw_node_feature_size = state["raw_node_feature_list"].shape[-1]
-        policy_features = np.ndarray.flatten([state["reachability"], state["isolation"]])
+        policy_features = np.array([state["reachability"].flatten(), state["isolation"].flatten()]).flatten()
         
         raw_node_feat_list = []
         node_feat_list = []
@@ -253,7 +260,10 @@ class Brain:
 
             logging.debug("==================START TRAINING=================")
             raw_node_feat_list, actual_probabilities, actual_rewards, minimize, next_hop_probabilities, avg_rewards, grads_and_vars = self._build_next_hop_policy_graph(states[i])
-            m, gv = self.session.run([minimize, grads_and_vars], feed_dict={raw_node_feat_list: raw_node_feature_list, actual_probabilities: action, actual_rewards: reward})
+            feed_dict = {i: d for i, d in zip(raw_node_feat_list, raw_node_feature_list)}
+            feed_dict[actual_probabilities] = action
+            feed_dict[actual_rewards] = reward
+            m, gv = self.session.run([minimize, grads_and_vars], feed_dict=feed_dict)
             gv = np.array(gv)
             grad = grad + gv[:, 0]
             count += len(states[i])
@@ -265,7 +275,7 @@ class Brain:
         # self.session.run(minimize, feed_dict={actual_next_hop_features: next_hop_features, actual_probabilities: actions, actual_rewards: rewards})
         
     def train_push(self, state, action, reward, state_):
-        logging.debug("Training Datum: Actual Next Hops Shape: %s, Action: %s, Reward: %s", str(state.shape), str(action), str(reward))
+        logging.debug("Training Datum: Raw Node Feature List Shape: %s, Action: %s, Reward: %s", str(state["raw_node_feature_list"].shape), str(action), str(reward))
 
         with self.lock_queue:
             # print "routes shape: %s" % str(state.shape)
@@ -283,8 +293,8 @@ class Brain:
     def predict(self, state):
         with self.default_graph.as_default():
             raw_node_feature_list, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate, _ = self._build_next_hop_policy_graph(state)
-            probabilities = self.session.run(next_hop_probabilities_estimate, feed_dict={raw_node_feature_list: state["raw_node_feature_list"]})
-            avg_reward = self.session.run(avg_rewards_estimate, feed_dict={raw_node_feature_list: state["raw_node_featuer_list"]})
+            probabilities = self.session.run(next_hop_probabilities_estimate, feed_dict={i: d for i, d in zip(raw_node_feature_list, state["raw_node_feature_list"])})
+            avg_reward = self.session.run(avg_rewards_estimate, feed_dict={i: d for i, d in zip(raw_node_feature_list, state["raw_node_feature_list"])})
             return probabilities, avg_reward
 
     def predict_prob(self, state):
@@ -295,8 +305,9 @@ class Brain:
             # np.save('predict_prob_%d' % self.train_iteration, [l.get_weights() for l in self.model.layers])
             # probabilities, avg_reward = self.model.predict(state)
             logging.debug("PREDICTING PROB.")
+            logging.debug("Shape of Raw Node Feature List: %s", state["raw_node_feature_list"].shape)
             raw_node_feature_list, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate, _ = self._build_next_hop_policy_graph(state)
-            probabilities = self.session.run(next_hop_probabilities_estimate, feed_dict={raw_node_feature_list: state["raw_node_feature_list"]})
+            probabilities = self.session.run(next_hop_probabilities_estimate, feed_dict={i: d for i, d in zip(raw_node_feature_list, state["raw_node_feature_list"])})
             return probabilities
 
     def predict_avg_reward(self, state):
@@ -305,5 +316,5 @@ class Brain:
             # prob, avg_reward = self.model.predict(state)
             logging.debug("PREDICTING AVG REWARD.")
             raw_node_feature_list, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate, _ = self._build_next_hop_policy_graph(state)
-            avg_reward = self.session.run(avg_rewards_estimate, feed_dict={raw_node_feature_list: state["raw_node_feature_list"]})
+            avg_reward = self.session.run(avg_rewards_estimate, feed_dict={i: d for i, d in zip(raw_node_feature_list, state["raw_node_feature_list"])})
             return avg_reward

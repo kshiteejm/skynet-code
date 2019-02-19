@@ -142,4 +142,4 @@ class Environment(threading.Thread):
         return self.env.state
 
     def getNodeFeatures(self):
-        return self.env.state["node_features"]        
+        return self.env.state["raw_node_feature_list"]        
