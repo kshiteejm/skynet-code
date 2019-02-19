@@ -48,7 +48,7 @@ class SkynetEnv(gym.Env):
         # self._init_switch_link_map(topo_style)
 
         # flow traffic state
-        self.num_flows = num_flows
+        self.num_flows = int(num_flows)
         self.flow_details = {}
         self.flow_switch_map = {}
         self.completed_flows = []
@@ -56,7 +56,7 @@ class SkynetEnv(gym.Env):
         self._init_flow_details(deterministic=deterministic)
 
         # isolation (vertex isolation for now) policies
-        self.num_isolation_policies = self.num_flows / 4
+        self.num_isolation_policies = int(self.num_flows / 4)
         self.isolation = np.zeros((self.num_flows, self.num_flows))
         self._init_isolation_policies(deterministic=deterministic)
 
@@ -388,7 +388,7 @@ class SkynetEnv(gym.Env):
     
     def get_next_hop_indices(self):
         next_hop_indices = []
-        for i in range(len(self.num_flows)):
+        for i in range(self.num_flows):
             next_hop_indices.append([])
         routes = self.state["routes"]
         for flow_id in self.incomplete_flows:
