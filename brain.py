@@ -57,25 +57,21 @@ class Brain:
 
     # featurize for a single flow graph
     def _build_featurize_graph(self, topology, raw_node_feature_size):
-        input_node_features = tf.placeholder(tf.float32, shape=(topology.shape[0], raw_node_feature_size))
+        input_node_features = tf.placeholder(tf.float32, shape=(None, topology.shape[0], raw_node_feature_size))
         
-        all_node_features = tf.zeros((topology.shape[0], self.node_feature_size))
+        all_node_features = tf.zeros((tf.shape(input_node_features)[0], topology.shape[0], self.node_feature_size))
         for _ in range(self.gnn_rounds):
             for node, edge_list in enumerate(topology):
                 logging.debug("Reached Here.")
-                # if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-                print_op = tf.print(Colorize.highlight("Featurize Graph: Input_Node_Features: "), all_node_features, ":Shape:", tf.shape(all_node_features))
-                with tf.control_dependencies([print_op]):
-                    ngbr_node_features = tf.boolean_mask(all_node_features, edge_list, axis=0)
-                # else:
-                #     ngbr_node_features = tf.boolean_mask(all_node_features, edge_list, axis=0)
-                summed_ngbr_node_features = tf.reduce_sum(ngbr_node_features, axis=0)
-                node_features = input_node_features[node]
+                ngbr_node_features = tf.map_fn(lambda t: tf.boolean_mask(t, edge_list, axis=0), all_node_features)
+                summed_ngbr_node_features = tf.map_fn(lambda t: tf.reduce_sum(t, axis=0), ngbr_node_features)
+                node_features = tf.map_fn(lambda t: t[node], input_node_features)
                 # Assumption: This will cause the thetas to be reused over multiple rounds, and multiple data points
-                with tf.variable_scope("featurize_ngbrs", reuse=True):
+                with tf.variable_scope("featurize_ngbrs", reuse=tf.AUTO_REUSE):
                     dense_ngbr_layer = tf.layers.dense(summed_ngbr_node_features, self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_ngbrs")
                     dense_node_layer = tf.layers.dense(node_features, self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_node")
-                    all_node_features[node] = tf.reduce_sum([dense_node_layer, dense_ngbr_layer])
+                    all_node_features = tf.map_fn(lambda t: tf.reduce_sum(t, axis=0), tf.stack([dense_ngbr_layer, dense_node_layer], axis=1))
+                    print(all_node_features)
         return input_node_features, all_node_features
 
     def _build_next_hop_priority_graph(self, node_features, policy_features):
