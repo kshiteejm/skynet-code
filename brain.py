@@ -139,6 +139,12 @@ class Brain:
         policy_features = tf.convert_to_tensor(policy_features)
         priority_features = tf.concat([next_hop_features, policy_features], axis=1)
         
+        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+            print_op1 = tf.print(Colorize.highlight("Policy Graph: Actual Next Hop Features:Shape:"), tf.shape(next_hop_features))
+            print_op2 = tf.print(Colorize.highlight("Policy Graph: Actual Policy Features:Shape:"), tf.shape(policy_features))
+            print_op3 = tf.print(Colorize.highlight("Policy Graph: Actual Priority Features:Shape:"), tf.shape(priority_features))
+            with tf.control_dependencies([print_op1, print_op2, print_op3]):
+                priority_features = tf.identity(priority_features)
 
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
             print_op = tf.print(Colorize.highlight("Policy Graph: Actual Next Hop Features:Shape:"), tf.shape(next_hop_features))
