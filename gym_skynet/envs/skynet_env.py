@@ -2,6 +2,9 @@
 # -*- coding: utf-8 -*-
 
 # core modules
+import sys
+sys.path.append("../../")
+
 import logging
 
 import math
@@ -13,13 +16,15 @@ from gym import error, spaces, utils
 from gym.utils import seeding
 import numpy as np
 
+from constants import MIN_GRAPH_SIZE, MAX_GRAPH_SIZE, MIN_FLOWS, MAX_FLOWS
+
 NEG_INF = -100.0
 POS_INF = 100.0
-MIN_GRAPH_SIZE = 5
-MAX_GRAPH_SIZE = 60
-MAX_NUM_SWITCHES = 60*60*5//4
-MIN_FLOWS = 1
-MAX_FLOWS = 100
+# MIN_GRAPH_SIZE = 5
+# MAX_GRAPH_SIZE = 60
+MAX_NUM_SWITCHES = MAX_GRAPH_SIZE*MAX_GRAPH_SIZE*5//4
+# MIN_FLOWS = 1
+# MAX_FLOWS = 100
 
 class SkynetEnv(gym.Env):
 
@@ -625,6 +630,7 @@ class SkynetEnv(gym.Env):
         # self.next_hop_details = next_hop_details
         self.next_hop_indices = self.get_next_hop_indices()
         next_hop_indices = np.array(self.get_next_hop_indices())
+        logging.debug("Next Hop Indices: %s", next_hop_indices)
 
         if len(self.completed_flows) == self.num_flows or self.is_game_over:
             done = True

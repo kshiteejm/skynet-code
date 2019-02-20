@@ -38,7 +38,7 @@ class Brain:
         self.optimizer = None
 
         #Enabling Eager Exec
-        tf.enable_eager_execution()
+        # tf.enable_eager_execution()
         self.session = tf.Session()
 
         self.node_feature_size = node_feature_size 
@@ -48,7 +48,7 @@ class Brain:
 
         self.net_width = net_width
         
-        self.session.run(tf.global_variables_initializer())
+        # self.session.run(tf.global_variables_initializer())
         self.default_graph = tf.get_default_graph()
 
     # featurize for a single flow graph
@@ -59,7 +59,7 @@ class Brain:
         for _ in range(self.gnn_rounds):
             next_node_features = []
             for node, edge_list in enumerate(topology):
-                # logging.debug("Reached Here.")
+                logging.debug("Reached Here.")
                 ngbr_node_features = tf.map_fn(lambda t: tf.boolean_mask(t, edge_list, axis=0), all_node_features)
                 summed_ngbr_node_features = tf.map_fn(lambda t: tf.reduce_sum(t, axis=0), ngbr_node_features)
                 node_features = tf.map_fn(lambda t: t[node], input_node_features)
@@ -70,6 +70,7 @@ class Brain:
                     updated_node_feature = tf.map_fn(lambda t: tf.reduce_sum(t, axis=0), tf.stack([dense_ngbr_layer, dense_node_layer], axis=1))
                     next_node_features.append(updated_node_feature)
             all_node_features = tf.stack(next_node_features, axis=1)
+            print(all_node_features)
         return input_node_features, all_node_features
 
     def _build_next_hop_priority_graph(self, inputs):
@@ -110,6 +111,7 @@ class Brain:
         num_flows = state["isolation"].shape[0]
         next_hop_indices = state["next_hop_indices"]
         raw_node_feature_size = state["raw_node_feature_list"].shape[-1]
+        logging.debug("Shapes: topology: %s, next_hop_indices: %s, raw_node_feature_list: %s", topology.shape, next_hop_indices.shape, state["raw_node_feature_list"].shape)
         
         raw_node_feat_list = []
         node_feat_list = []
