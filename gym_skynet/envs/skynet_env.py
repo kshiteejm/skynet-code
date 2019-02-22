@@ -488,8 +488,8 @@ class SkynetEnv(gym.Env):
     def get_random_next_hop(self, p=None):
         next_hop_details = []
         for flow_id in range(1, len(self.next_hop_indices)+1):
-            for switch_id in self.next_hop_indices[flow_id-1]:
-                next_hop_details.append((flow_id, switch_id))
+            for switch_index in self.next_hop_indices[flow_id-1]:
+                next_hop_details.append((flow_id, switch_index+1))
         random_next_hop_index = np.random.choice(list(range(0, len(next_hop_details))), p=p)
         return next_hop_details[random_next_hop_index], len(next_hop_details), random_next_hop_index
 
