@@ -59,7 +59,6 @@ class Brain:
         for _ in range(self.gnn_rounds):
             next_node_features = []
             for node, edge_list in enumerate(topology):
-                logging.debug("Reached Here.")
                 ngbr_node_features = tf.map_fn(lambda t: tf.boolean_mask(t, edge_list, axis=0), all_node_features)
                 summed_ngbr_node_features = tf.map_fn(lambda t: tf.reduce_sum(t, axis=0), ngbr_node_features)
                 node_features = tf.map_fn(lambda t: t[node], input_node_features)
@@ -70,7 +69,7 @@ class Brain:
                     updated_node_feature = tf.map_fn(lambda t: tf.reduce_sum(t, axis=0), tf.stack([dense_ngbr_layer, dense_node_layer], axis=1))
                     next_node_features.append(updated_node_feature)
             all_node_features = tf.stack(next_node_features, axis=1)
-            print(all_node_features)
+            # print(all_node_features)
         return input_node_features, all_node_features
 
     def _build_next_hop_priority_graph(self, inputs):
@@ -123,6 +122,8 @@ class Brain:
             raw_node_feat_list.append(raw_node_features)
             node_feat_list.append(node_features)
 
+            print(node_features)
+            print(next_hop_indices)
             per_flow_next_hop_features = tf.gather(node_features, next_hop_indices[flow_id])
             next_hop_feature_list.append(per_flow_next_hop_features)
 
@@ -266,7 +267,7 @@ class Brain:
         return grad, count
 
     def train_push(self, state, action, reward, state_):
-        logging.debug("Training Datum: Raw Node Feature List Shape: %s, Action: %s, Reward: %s", str(state["raw_node_feature_list"].shape), str(action), str(reward))
+        logging.debug("Training Datum: State: %s, Action: %s, Reward: %s", str(state), str(action), str(reward))
 
         with self.lock_queue:
             self.train_queue[0].append([state])

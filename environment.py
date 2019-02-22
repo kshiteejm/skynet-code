@@ -17,15 +17,17 @@ from agent import Agent
 class Environment(threading.Thread):
     INSTANCE_NUM = itertools.count()
 
-    def __init__(self, brain, num_flows, num_switches, topo,
+    def __init__(self, brain, num_flows, graph_size, topo,
                 node_features=None, render=False, eps_start=EPS_START,
                 eps_end=EPS_END, eps_steps=EPS_STEPS, thread_delay=THREAD_DELAY,
                 per_instance_limit=PER_INSTANCE_LIMIT, 
                 training_instance_limit=TRAINING_INSTANCE_LIMIT, 
                 testing_instance_limit=TESTING_INSTANCE_LIMIT,
-                test=TESTING):
+                test=TESTING, thread_id=0):
 
         threading.Thread.__init__(self)
+        self.thread_id = thread_id
+
         self.instance_iter = 0
         self.deviation = 0.0
         self.num_instances = 0
@@ -34,7 +36,7 @@ class Environment(threading.Thread):
         self.brain = brain
 
         self.num_flows = num_flows 
-        self.num_switches = num_switches 
+        self.graph_size = graph_size 
         self.topo = topo
         
         self.eps_start = eps_start
@@ -64,7 +66,7 @@ class Environment(threading.Thread):
         self.stop_signal = False
         self.render = render
         self.env = gym.make(ENV)
-        self.env.__init__(topo_size=self.num_switches, num_flows=self.num_flows, topo_style=self.topo)
+        self.env.__init__(topo_size=self.graph_size, num_flows=self.num_flows, topo_style=self.topo)
         self.agent = Agent(self.env, self.brain, eps_start=eps_start, eps_end=eps_end, 
                             eps_steps=eps_steps, test=self.test)
         
@@ -74,11 +76,10 @@ class Environment(threading.Thread):
         self.unique_id = next(Environment.INSTANCE_NUM)
         self.num_instances += 1
         self.instance_iter = 0
-        logging.debug("Instance Number: %d", self.unique_id)
+        logging.debug("ENV_THREAD: Instance Number: %d", self.unique_id)
 
     def runEpisode(self):
         state = self.env.reset()
-        logging.debug("Flow Details: %s", str(self.env.flow_details))
 
         while True:         
             time.sleep(self.thread_delay)
@@ -86,12 +87,13 @@ class Environment(threading.Thread):
             if self.render: 
                 self.env.render()
             
+            logging.debug("ENV_THREAD: State:  %s", str(state))
+
             action, is_rand = self.agent.act(state)
             state_, reward, done, info = self.env.step(action)
-            
-            logging.debug("Raw Node Features List Shape:  %s", str(state["raw_node_feature_list"].shape))
-            logging.debug("Action: %s, Random: %s", str(action), str(is_rand))
-            logging.debug("Reward: %s", str(reward))
+
+            logging.debug("ENV_THREAD: Action: %s, Random: %s", str(action), str(is_rand))
+            logging.debug("ENV_THREAD: Reward: %s", str(reward))
             
             if done:
                 logging.debug("DONE")

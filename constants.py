@@ -33,9 +33,9 @@ MODEL_VERSION = 1   # state-dependent
 
 TOPOLOGIES = ['fat_tree']
 MIN_GRAPH_SIZE = 2
-MAX_GRAPH_SIZE = 4
+MAX_GRAPH_SIZE = 2
 MIN_FLOWS = 2
-MAX_FLOWS = 4
+MAX_FLOWS = 2
 
 # TOPO_FEAT = True
 

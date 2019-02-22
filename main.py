@@ -46,8 +46,6 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
 
     delete()
 
-    Environment.INSTANCE_NUM = itertools.count()
-
     brain = Brain(gamma=gamma, n_step_return=n_step_return, 
                 learning_rate=learning_rate, min_batch=min_batch, loss_v=loss_v, 
                 loss_entropy=loss_entropy, node_feature_size=node_feature_size,
@@ -55,26 +53,29 @@ def main(gamma=GAMMA, n_step_return=N_STEP_RETURN, learning_rate=LEARNING_RATE,
                 net_width=net_width)
     
     while True:
+        Environment.INSTANCE_NUM = itertools.count()
 
         envs = []
-        for thr in range(threads):
+        for thread_id in range(threads):
             topo = np.random.choice(len(TOPOLOGIES))
             topo = TOPOLOGIES[topo]
             
-            num_switches = np.random.choice(np.arange(MIN_GRAPH_SIZE, MAX_GRAPH_SIZE))
+            graph_size = np.random.choice(np.arange(MIN_GRAPH_SIZE, MAX_GRAPH_SIZE+1))
             
-            num_flows = min((num_switches ** 2) / 2, MAX_FLOWS)
-            num_flows = np.random.choice(np.arange(MIN_FLOWS, num_flows))
+            # num_flows = min((graph_size ** 2) / 2, MAX_FLOWS)
+            num_flows = np.random.choice(np.arange(MIN_FLOWS, MAX_FLOWS+1))
+            logging.debug("NUM FLOWS: %s", num_flows)
+            num_switches = graph_size*graph_size*5//4  # for fat-tree graph
 
-            logging.debug('THREAD %d: TOPO: %s, NUM_FLOWS: %d, NUM_SWITCHES: %d' % (thr, topo, num_flows, num_switches))
+            logging.debug('MAIN: THREAD %d: TOPO: %s, NUM_FLOWS: %d, NUM_SWITCHES: %d' % (thread_id, topo, num_flows, num_switches))
 
-            env = Environment(brain, num_flows, num_switches, topo, 
+            env = Environment(brain, num_flows, graph_size, topo, 
                             eps_start=eps_start, eps_end=eps_end,
                             eps_steps=eps_steps, thread_delay=thread_delay,
                             per_instance_limit=per_instance_limit, 
                             training_instance_limit=training_instance_limit, 
                             testing_instance_limit=testing_instance_limit,
-                            test=test)
+                            test=test, thread_id=thread_id)
             envs.append(env)
 
         opts = [Optimizer(brain) for _ in range(optimizers)]
@@ -135,21 +136,22 @@ def test_model(threads=THREADS, eps_start=EPS_START, eps_end=EPS_END,
     Environment.INSTANCE_NUM = itertools.count()
 
     envs = []
-    for _ in range(threads):
+    for thread_id in range(threads):
         topo = np.random.choice(len(TOPOLOGIES))
         topo = TOPOLOGIES[topo]
-        num_switches = np.random.choice(np.arange(MIN_GRAPH_SIZE, MAX_GRAPH_SIZE))
-        num_flows = np.inf
-        while 2 * num_flows > num_switches ** 2:
-            num_flows = np.random.choice(MAX_FLOWS)
+        graph_size = np.random.choice(np.arange(MIN_GRAPH_SIZE, MAX_GRAPH_SIZE+1))
+        num_flows = np.random.choice(np.arange(MIN_FLOWS, MAX_FLOWS+1))
+        # num_flows = np.inf
+        # while 2 * num_flows > num_switches ** 2:
+        #     num_flows = np.random.choice(MAX_FLOWS)
 
-        env = Environment(brain, num_flows, num_switches, topo, 
+        env = Environment(brain, num_flows, graph_size, topo, 
                         eps_start=eps_start, eps_end=eps_end,
                         eps_steps=eps_steps, thread_delay=thread_delay,
                         per_instance_limit=per_instance_limit, 
                         training_instance_limit=training_instance_limit, 
                         testing_instance_limit=testing_instance_limit,
-                        test=test)
+                        test=test, thread_id=thread_id)
         envs.append(env)
     test_instances = 0
     test_deviation = 0.0
