@@ -48,7 +48,7 @@ class Brain:
 
         self.net_width = net_width
         
-        # self.session.run(tf.global_variables_initializer())
+        self.session.run(tf.global_variables_initializer())
         self.default_graph = tf.get_default_graph()
     
     # featurize for a single flow graph
@@ -85,7 +85,7 @@ class Brain:
                 dense_layer = tf.layers.dense(inputs, self.net_width, activation=tf.nn.relu, name="dense_priority_1")
             
             if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-                with tf.variable_scope("dense_priority_1", reuse=True):
+                with tf.variable_scope("dense_priority_1", reuse=tf.AUTO_REUSE):
                     weights = tf.get_variable("kernel")
                     print_op = tf.print(Colorize.highlight("Priority Graph: Priority Dense Layer 1 Weights:"), weights, ":Shape:", tf.shape(weights))
                 with tf.control_dependencies([print_op]):
@@ -188,8 +188,9 @@ class Brain:
         entropy = self.loss_entropy * tf.reduce_sum(next_hop_probabilities * tf.log(next_hop_probabilities + 1e-10), axis=1, keepdims=True) # maximize entropy (regularization)
         loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
         self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate, decay=.99)
-        grads_and_vars = self.optimizer.compute_gradients(loss_total)
-        minimize = self.optimizer.minimize(loss_total)
+        with tf.variable_scope("optimize_function", reuse=tf.AUTO_REUSE):
+            grads_and_vars = self.optimizer.compute_gradients(loss_total)
+            minimize = self.optimizer.minimize(loss_total)
 
         return (raw_node_feat_list, actual_probabilities, 
                 actual_rewards, minimize, next_hop_probabilities, 
@@ -271,11 +272,12 @@ class Brain:
             return probabilities, avg_reward
 
     def predict_prob(self, state):
-        logging.debug("PREDICTING PROB.")
-        logging.debug("Shape of Raw Node Feature List: %s", state["raw_node_feature_list"].shape)
-        raw_node_feature_list, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate, _ = self._build_next_hop_policy_graph(state)
-        probabilities = self.session.run(next_hop_probabilities_estimate, feed_dict={i: d for i, d in zip(raw_node_feature_list, state["raw_node_feature_list"])})
-        return probabilities
+        with self.default_graph.as_default():
+            logging.debug("PREDICTING PROB.")
+            logging.debug("Shape of Raw Node Feature List: %s", state["raw_node_feature_list"].shape)
+            raw_node_feature_list, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate, _ = self._build_next_hop_policy_graph(state)
+            probabilities = self.session.run(next_hop_probabilities_estimate, feed_dict={i: d for i, d in zip(raw_node_feature_list, state["raw_node_feature_list"])})
+            return probabilities
 
     def predict_avg_reward(self, state):
         with self.default_graph.as_default():
