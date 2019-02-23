@@ -40,6 +40,7 @@ class Brain:
         #Enabling Eager Exec
         # tf.enable_eager_execution()
         self.session = tf.Session()
+        self.initialized = False
 
         self.node_feature_size = node_feature_size 
         self.gnn_rounds = gnn_rounds
@@ -48,7 +49,6 @@ class Brain:
 
         self.net_width = net_width
         
-        self.session.run(tf.global_variables_initializer())
         self.default_graph = tf.get_default_graph()
     
     # featurize for a single flow graph
@@ -76,7 +76,7 @@ class Brain:
     def _build_next_hop_priority_graph(self, inputs):
         inputs = tf.expand_dims(inputs, 0)
 
-        with tf.variable_scope("priority_graph"): 
+        with tf.variable_scope("priority_graph", reuse=tf.AUTO_REUSE): 
             if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
                 print_op = tf.print(Colorize.highlight("Priority Graph: Input Hops:"), inputs, ":Shape:", tf.shape(inputs))
                 with tf.control_dependencies([print_op]):
@@ -192,6 +192,10 @@ class Brain:
             grads_and_vars = self.optimizer.compute_gradients(loss_total)
             minimize = self.optimizer.minimize(loss_total)
 
+        if not self.initialized:
+            self.session.run(tf.global_variables_initializer())
+            self.initialized = True
+        
         return (raw_node_feat_list, actual_probabilities, 
                 actual_rewards, minimize, next_hop_probabilities, 
                 avg_rewards, grads_and_vars)
