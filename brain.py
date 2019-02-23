@@ -50,30 +50,32 @@ class Brain:
         
         # self.session.run(tf.global_variables_initializer())
         self.default_graph = tf.get_default_graph()
-
+    
     # featurize for a single flow graph
     def _build_featurize_graph(self, topology, raw_node_feature_size):
-        input_node_features = tf.placeholder(tf.float32, shape=(None, topology.shape[0], raw_node_feature_size))
-        
-        all_node_features = tf.zeros((tf.shape(input_node_features)[0], topology.shape[0], self.node_feature_size))
+        input_node_features = tf.placeholder(tf.float32, shape=(topology.shape[0], raw_node_feature_size))
+        all_node_features = tf.zeros((topology.shape[0], self.node_feature_size))
         for _ in range(self.gnn_rounds):
             next_node_features = []
             for node, edge_list in enumerate(topology):
-                ngbr_node_features = tf.map_fn(lambda t: tf.boolean_mask(t, edge_list, axis=0), all_node_features)
-                summed_ngbr_node_features = tf.map_fn(lambda t: tf.reduce_sum(t, axis=0), ngbr_node_features)
-                node_features = tf.map_fn(lambda t: t[node], input_node_features)
+                ngbr_node_features = tf.boolean_mask(all_node_features, edge_list, axis=0)
+                summed_ngbr_node_features = tf.reduce_sum(ngbr_node_features, axis=0)
+                node_features = input_node_features[node]
                 # Assumption: This will cause the thetas to be reused over multiple rounds, and multiple data points
                 with tf.variable_scope("featurize_ngbrs", reuse=tf.AUTO_REUSE):
-                    dense_ngbr_layer = tf.layers.dense(summed_ngbr_node_features, self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_ngbrs")
-                    dense_node_layer = tf.layers.dense(node_features, self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_node")
-                    updated_node_feature = tf.map_fn(lambda t: tf.reduce_sum(t, axis=0), tf.stack([dense_ngbr_layer, dense_node_layer], axis=1))
+                    dense_ngbr_layer = tf.layers.dense(tf.expand_dims(summed_ngbr_node_features, 0), self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_ngbrs")
+                    dense_node_layer = tf.layers.dense(tf.expand_dims(node_features, 0), self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_node")
+                    dense_ngbr_layer = tf.squeeze(dense_ngbr_layer, axis=[0])
+                    dense_node_layer = tf.squeeze(dense_node_layer, axis=[0])
+                    updated_node_feature = tf.reduce_sum([dense_node_layer, dense_ngbr_layer], axis=0)
                     next_node_features.append(updated_node_feature)
-            all_node_features = tf.stack(next_node_features, axis=1)
+            all_node_features = tf.convert_to_tensor(next_node_features)
             # print(all_node_features)
         return input_node_features, all_node_features
 
     def _build_next_hop_priority_graph(self, inputs):
-        # inputs = tf.concat([node_features, policy_features], axis=0)
+        inputs = tf.expand_dims(inputs, 0)
+
         with tf.variable_scope("priority_graph"): 
             if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
                 print_op = tf.print(Colorize.highlight("Priority Graph: Input Hops:"), inputs, ":Shape:", tf.shape(inputs))
@@ -103,14 +105,14 @@ class Brain:
                 with tf.control_dependencies([print_op]):
                     out_priority = tf.identity(out_priority)
 
-            return inputs, out_priority
+            return out_priority
 
     def _build_next_hop_policy_graph(self, state):
         topology = state["topology"]
         num_flows = state["isolation"].shape[0]
         next_hop_indices = state["next_hop_indices"]
         raw_node_feature_size = state["raw_node_feature_list"].shape[-1]
-        logging.debug("Shapes: topology: %s, next_hop_indices: %s, raw_node_feature_list: %s", topology.shape, next_hop_indices.shape, state["raw_node_feature_list"].shape)
+        logging.debug("BRAIN: INPUT: Shapes: topology: %s, next_hop_indices: %s, raw_node_feature_list: %s", topology.shape, next_hop_indices.shape, state["raw_node_feature_list"].shape)
         
         raw_node_feat_list = []
         node_feat_list = []
@@ -121,54 +123,34 @@ class Brain:
             raw_node_features, node_features = self._build_featurize_graph(topology, raw_node_feature_size)
             raw_node_feat_list.append(raw_node_features)
             node_feat_list.append(node_features)
+            logging.debug("BRAIN: TF: Raw Node Features: %s", raw_node_features)
+            logging.debug("BRAIN: TF: Output Node Features: %s", node_features)
 
-            print(node_features)
-            print(next_hop_indices)
             per_flow_next_hop_features = tf.gather(node_features, next_hop_indices[flow_id])
+            logging.debug("BRAIN: TF: Per Flow Next Hop Features: %s", per_flow_next_hop_features)
             next_hop_feature_list.append(per_flow_next_hop_features)
 
-            policy_features = Environment.getPolicyFeatures(state, flow_id)[np.newaxis,:]
-            policy_features = tf.convert_to_tensor(policy_features)
-            priority_features = tf.map_fn(lambda x: tf.concat([x, policy_features], axis=1), per_flow_next_hop_features)
+            policy_features = Environment.getPolicyFeatures(state, flow_id)
+            policy_features = tf.convert_to_tensor(policy_features, dtype=tf.float32)
+            priority_features = tf.map_fn(lambda x: tf.concat([x, policy_features], axis=0), per_flow_next_hop_features)
+            logging.debug("BRAIN: TF: Per Flow Priority Features: %s", priority_features)
             priority_feature_list.append(priority_features)
 
         priority_features = tf.concat(priority_feature_list, axis=0)
         next_hop_features = tf.concat(next_hop_feature_list, axis=0)
+        # priority_features = tf.expand_dims(priority_features, 0)
+        # next_hop_features = tf.expand_dims(next_hop_features, 0)
+        logging.debug("BRAIN: TF: All Flows Priority Features: %s", priority_features)
+        logging.debug("BRAIN: TF: All Flows Next Hop Features: %s", next_hop_features)
         actual_probabilities = tf.placeholder(tf.float32, shape=(None,))
         actual_rewards = tf.placeholder(tf.float32, shape=(None,))
-
-        logging.debug('Policy Feature shape: %s', (policy_features.shape,))
         
-        
-        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-            print_op1 = tf.print(Colorize.highlight("Policy Graph: Actual Next Hop Features:Shape:"), tf.shape(next_hop_features))
-            print_op2 = tf.print(Colorize.highlight("Policy Graph: Actual Policy Features:Shape:"), tf.shape(policy_features))
-            print_op3 = tf.print(Colorize.highlight("Policy Graph: Actual Priority Features:Shape:"), tf.shape(priority_features))
-            with tf.control_dependencies([print_op1, print_op2, print_op3]):
-                priority_features = tf.identity(priority_features)
-
-        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-            print_op = tf.print(Colorize.highlight("Policy Graph: Actual Next Hop Features:Shape:"), tf.shape(next_hop_features))
-            with tf.control_dependencies([print_op]):
-                avg_next_hop_features = tf.reduce_mean(next_hop_features, axis=1)
-        else:
-            avg_next_hop_features = tf.reduce_mean(next_hop_features, axis=1)
-        
-        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-            print_op = tf.print(Colorize.highlight("Policy Graph: Average Next Hop Features:"), avg_next_hop_features, ":Shape:", tf.shape(avg_next_hop_features))
-            with tf.control_dependencies([print_op]):
-                dense_layer = tf.layers.dense(avg_next_hop_features, self.net_width, activation=tf.nn.relu, name="dense_policy_1")
-        else:
-            dense_layer = tf.layers.dense(avg_next_hop_features, self.net_width, activation=tf.nn.relu, name="dense_policy_1")
-        
-        if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-            with tf.variable_scope("dense_policy_1", reuse=True):
-                weights = tf.get_variable("kernel")
-                print_op = tf.print(Colorize.highlight("Policy Graph: Reward Dense Layer 1 Weights:"), weights, ":Shape:", tf.shape(weights))
-            with tf.control_dependencies([print_op]):
-                avg_rewards = tf.layers.dense(dense_layer, 1, name="reward") # linear activation
-        else:
-            avg_rewards = tf.layers.dense(dense_layer, 1, name="reward") # linear activation
+        with tf.variable_scope("reward_model", reuse=tf.AUTO_REUSE):
+            avg_next_hop_features = tf.reduce_mean(next_hop_features, axis=0)
+            avg_next_hop_features = tf.expand_dims(avg_next_hop_features, 0)
+            logging.debug("BRAIN: TF: All Flows Avg Hop Features: %s", avg_next_hop_features)
+            dense_reward_layer = tf.layers.dense(avg_next_hop_features, self.net_width, activation=tf.nn.relu, name="dense_policy_1")
+            avg_rewards = tf.layers.dense(dense_reward_layer, 1, name="reward") # linear activation
         
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
             print_op = tf.print(Colorize.highlight("Policy Graph: Average Rewards Estimate:"), avg_rewards, ":Shape:", tf.shape(avg_rewards))

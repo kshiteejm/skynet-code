@@ -36,6 +36,7 @@ MIN_GRAPH_SIZE = 2
 MAX_GRAPH_SIZE = 2
 MIN_FLOWS = 2
 MAX_FLOWS = 2
+MAX_SWITCHES =  (MAX_GRAPH_SIZE*MAX_GRAPH_SIZE*5)//4
 
 # TOPO_FEAT = True
 
@@ -55,23 +56,23 @@ ISOLATION_PROJ = None
 FLOW_ID_PROJ = None
 REACHABILITY_PROJ = None
 
-if os.path.isfile('isolation_proj.npy'):
+if os.path.isfile(str('isolation_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES))):
     ISOLATION_PROJ = np.load('isolation_proj.npy')
 else:
     ISOLATION_PROJ = np.random.normal(0.0, 1.0, (POLICY_FEATURE_SIZE, MAX_FLOWS))
-    np.save('isolation_proj.npy', ISOLATION_PROJ)
+    np.save(str('isolation_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES)), ISOLATION_PROJ)
 
-if os.path.isfile('flow_id_proj.npy'):
-    FLOW_ID_PROJ = np.load('flow_id_proj.npy')
+if os.path.isfile(str('flow_id_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES))):
+    FLOW_ID_PROJ = np.load(str('flow_id_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES)))
 else:
     FLOW_ID_PROJ = np.random.normal(0.0, 1.0, (POLICY_FEATURE_SIZE, MAX_FLOWS))
-    np.save('flow_id_proj.npy', FLOW_ID_PROJ)
+    np.save(str('flow_id_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES)), FLOW_ID_PROJ)
 
-if os.path.isfile('reachability_proj.npy'):
-    REACHABILITY_PROJ = np.load('reachability_proj.npy')
+if os.path.isfile(str('reachability_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES))):
+    REACHABILITY_PROJ = np.load(str('reachability_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES)))
 else:
-    REACHABILITY_PROJ = np.random.normal(0.0, 1.0, (POLICY_FEATURE_SIZE, MAX_FLOWS))
-    np.save('reachability_proj.npy', REACHABILITY_PROJ)
+    REACHABILITY_PROJ = np.random.normal(0.0, 1.0, (POLICY_FEATURE_SIZE, MAX_SWITCHES))
+    np.save(str('reachability_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES)), REACHABILITY_PROJ)
 
 class Colorize:
     RED = '\033[91m'

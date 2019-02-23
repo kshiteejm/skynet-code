@@ -149,13 +149,13 @@ class Environment(threading.Thread):
 
     @staticmethod
     def getPolicyFeatures(state, flow_id):
-        num_flows = state['isolation'].shape[0]
-
+        num_flows = state['isolation'].shape[1]
         isolation = state['isolation'][flow_id]
         isolation = ISOLATION_PROJ[:, :num_flows] @ isolation
 
+        num_switches = state['reachability'].shape[1]
         reachability = state['reachability'][flow_id]
-        reachability = REACHABILITY_PROJ[:, :num_flows] @ reachability
+        reachability = REACHABILITY_PROJ[:, :num_switches] @ reachability
 
         id_one_hot = np.zeros(num_flows, dtype=np.float32)
         id_one_hot[flow_id] = 1.0
