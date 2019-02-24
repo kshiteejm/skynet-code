@@ -16,15 +16,10 @@ from gym import error, spaces, utils
 from gym.utils import seeding
 import numpy as np
 
-from constants import MIN_GRAPH_SIZE, MAX_GRAPH_SIZE, MIN_FLOWS, MAX_FLOWS
-
 NEG_INF = -100.0
 POS_INF = 100.0
 # MIN_GRAPH_SIZE = 5
 # MAX_GRAPH_SIZE = 60
-MAX_NUM_SWITCHES = MAX_GRAPH_SIZE*MAX_GRAPH_SIZE*5//4
-# MIN_FLOWS = 1
-# MAX_FLOWS = 100
 
 class SkynetEnv(gym.Env):
 
@@ -67,7 +62,7 @@ class SkynetEnv(gym.Env):
 
         # isolation (vertex isolation for now) policies
         self.num_isolation_policies = int(self.num_flows / 4)
-        self.isolation = np.zeros((MAX_FLOWS, MAX_FLOWS))
+        self.isolation = np.zeros((self.num_flows, self.num_flows))
         self._init_isolation_policies(deterministic=deterministic)
 
         # visited, can_visit
@@ -98,8 +93,8 @@ class SkynetEnv(gym.Env):
         self.state = dict(
             topology=np.zeros((self.num_switches, self.num_switches)),
             routes=np.zeros((self.num_flows, self.num_switches)),
-            reachability=np.zeros((MAX_FLOWS, MAX_NUM_SWITCHES)),
-            isolation=np.zeros((MAX_FLOWS, MAX_FLOWS)),
+            reachability=np.zeros((self.num_flows, self.num_switches)),
+            isolation=np.zeros((self.num_flows, self.num_flows)),
             raw_node_feature_list=np.zeros((self.num_flows, self.num_switches, self.raw_node_feature_size)),
             # next_hop_features=np.array([]),
             next_hop_indices=np.array([])
@@ -122,8 +117,8 @@ class SkynetEnv(gym.Env):
         self.state = dict(
             topology=np.zeros((self.num_switches, self.num_switches)),
             routes=np.zeros((self.num_flows, self.num_switches)),
-            reachability=np.zeros((MAX_FLOWS, MAX_NUM_SWITCHES)),
-            isolation=np.zeros((MAX_FLOWS, MAX_FLOWS)),
+            reachability=np.zeros((self.num_flows, self.num_switches)),
+            isolation=np.zeros((self.num_flows, self.num_flows)),
             raw_node_feature_list=np.zeros((self.num_flows, self.num_switches, self.raw_node_feature_size)),
             # next_hop_features=np.array([]),
             next_hop_indices=np.array([])
