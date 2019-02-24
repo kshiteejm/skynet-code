@@ -76,10 +76,11 @@ class Environment(threading.Thread):
         self.unique_id = next(Environment.INSTANCE_NUM)
         self.num_instances += 1
         self.instance_iter = 0
-        logging.debug("ENV_THREAD: Instance Number: %d", self.unique_id)
 
     def runEpisode(self):
         state = self.env.reset()
+
+        logging.debug("ENV_THREAD %s: Unique Id: %d, Instance Num: %d", self.thread_id, self.unique_id, self.instance_iter)
 
         while True:         
             time.sleep(self.thread_delay)
@@ -87,13 +88,13 @@ class Environment(threading.Thread):
             if self.render: 
                 self.env.render()
             
-            logging.debug("ENV_THREAD: State:  %s", str(state))
+            logging.debug("ENV_THREAD %s: State:  %s", self.thread_id, str(state))
 
             action, is_rand = self.agent.act(state)
             state_, reward, done, info = self.env.step(action)
 
-            logging.debug("ENV_THREAD: Action: %s, Random: %s", str(action), str(is_rand))
-            logging.debug("ENV_THREAD: Reward: %s", str(reward))
+            logging.debug("ENV_THREAD %s: Action: %s, Random: %s", self.thread_id, str(action), str(is_rand))
+            logging.debug("ENV_THREAD %s: Reward: %s", self.thread_id, str(reward))
             
             if done:
                 logging.debug("DONE")

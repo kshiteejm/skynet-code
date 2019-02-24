@@ -137,7 +137,7 @@ class SkynetEnv(gym.Env):
         for src_switch_id in self.switch_switch_map:
             for dst_switch_id in self.switch_switch_map[src_switch_id]:
                 topology[src_switch_id-1][dst_switch_id-1] = 1
-        logging.debug("GYM_ENV: Topology: %s", topology)
+        # logging.debug("GYM_ENV: Topology: %s", topology)
         logging.debug("GYM_ENV: Flows: %s", self.flow_details)
 
         # initialize routes, reachability
@@ -313,7 +313,7 @@ class SkynetEnv(gym.Env):
                         if switch_id == src_switch_id_1 or switch_id == dst_switch_id_1:
                             continue
                         raw_node_feature_list[flow_id_2-1][switch_id-1] = routes_1[switch_id-1]
-        logging.debug("GYM_ENV: Raw Node Feature List: %s", raw_node_feature_list)
+        # logging.debug("GYM_ENV: Raw Node Feature List: %s", raw_node_feature_list)
         return raw_node_feature_list
 
     def _get_neighbors(self, flow_id, root_switch_id, visited=True):
@@ -402,7 +402,7 @@ class SkynetEnv(gym.Env):
         for i in range(self.num_flows):
             next_hop_indices.append([])
         routes = self.state["routes"]
-        logging.debug("GYM_ENV: Routes: %s", np.array(routes))
+        # logging.debug("GYM_ENV: Routes: %s", np.array(routes))
         for flow_id in self.incomplete_flows:
             recent_switch_id = self.flow_switch_map[flow_id][-1]
             next_switch_ids = self.switch_switch_map[recent_switch_id]
@@ -417,7 +417,7 @@ class SkynetEnv(gym.Env):
                             reachable_to_dst_next_switch_ids.append(switch_id)
             for switch_id in reachable_to_dst_next_switch_ids:
                 next_hop_indices[flow_id-1].append(switch_id-1)
-        logging.debug("GYM_ENV: Next Hop Indices: %s", np.array(next_hop_indices))
+        # logging.debug("GYM_ENV: Next Hop Indices: %s", np.array(next_hop_indices))
         return np.array(next_hop_indices)
 
     def get_next_hop_features(self):

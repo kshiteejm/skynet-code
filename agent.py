@@ -54,7 +54,7 @@ class Agent:
             action = self.env.get_random_next_hop()
             return action, True
         else:
-            logging.debug("AGENT: Next Hop Indices: %s", state["next_hop_indices"])
+            # logging.debug("AGENT: Next Hop Indices: %s", state["next_hop_indices"])
             # state = np.array([state])
             probabilities = self.brain.predict_prob(state)[0]
             action = self.env.get_random_next_hop(p=probabilities)

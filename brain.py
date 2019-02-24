@@ -120,7 +120,8 @@ class Brain:
         priority_feature_list = []
 
         for flow_id in range(num_flows):
-            if not next_hop_indices[flow_id]:
+            if len(next_hop_indices[flow_id]) == 0:
+                logging.debug("BRAIN: No Next Hop Features for Flow %s", flow_id)
                 continue
             raw_node_features, node_features = self._build_featurize_graph(topology, raw_node_feature_size)
             raw_node_feat_list.append(raw_node_features)
