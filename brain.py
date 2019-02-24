@@ -17,6 +17,7 @@ class Brain:
     # train_queue = [ [[], [], []], [], [], [[], [], []], [] ]    # s, a, r, s', s' terminal mask
     train_queue = [ [], [], [], [], [] ]
     lock_queue = threading.Lock()
+    lock_model = threading.Lock()
 
     def __init__(self, gamma=GAMMA, n_step_return=N_STEP_RETURN, 
                 learning_rate=LEARNING_RATE, min_batch=MIN_BATCH, loss_v=LOSS_V, 
@@ -135,8 +136,10 @@ class Brain:
 
             policy_features = Environment.getPolicyFeatures(state, flow_id)
             policy_features = tf.convert_to_tensor(policy_features, dtype=tf.float32)
+            logging.debug("BRAIN: TF: Policy Features: %s", policy_features)
             priority_features = tf.map_fn(lambda x: tf.concat([x, policy_features], axis=0), per_flow_next_hop_features)
             logging.debug("BRAIN: TF: Per Flow Priority Features: %s", priority_features)
+            # logging.debug("BRAIN: TF: Per Flow Next Hop ")
             priority_feature_list.append(priority_features)
 
         priority_features = tf.concat(priority_feature_list, axis=0)
@@ -145,8 +148,8 @@ class Brain:
         next_hop_features = tf.expand_dims(next_hop_features, 0)
         logging.debug("BRAIN: TF: All Flows Priority Features: %s", priority_features)
         logging.debug("BRAIN: TF: All Flows Next Hop Features: %s", next_hop_features)
-        actual_probabilities = tf.placeholder(tf.float32, shape=(None,))
-        actual_rewards = tf.placeholder(tf.float32, shape=(None,))
+        actual_probabilities = tf.placeholder(tf.float32, shape=(None,None))
+        actual_rewards = tf.placeholder(tf.float32, shape=(None,1))
         
         with tf.variable_scope("reward_model", reuse=tf.AUTO_REUSE):
             if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
@@ -217,6 +220,8 @@ class Brain:
 
     def optimize(self):
 
+        # logging.debug("OPTIMIZER: Length of Training Queue: %s", len(self.train_queue[0]))
+
         if len(self.train_queue[0]) < self.min_batch:
             time.sleep(0)
             return 0.0, 0
@@ -230,6 +235,8 @@ class Brain:
         
         self.train_iteration = self.train_iteration + 1
 
+        logging.debug("OPTIMIZER: =================================== BEGINS ===================================")
+
         if len(states) > 5*self.min_batch:
             logging.debug("Optimizer alert! Minimizing batch of %d", len(states))
 
@@ -239,32 +246,36 @@ class Brain:
             if len(states[i]) == 0:
                 continue
             
-            raw_node_feature_list = np.vstack([states[i]["raw_node_feature_list"]])
+            logging.debug("OPTIMIZER: Train Queue Datum Contents: State: %s, Action: %s, Reward: %s", states[i], actions[i], rewards[i])
+            raw_node_feature_list = states[i][0]["raw_node_feature_list"]
             action = np.vstack([actions[i]])
             reward = np.vstack([rewards[i]])
-            raw_node_feature_list_ = np.vstack([states_[i]["raw_node_feature_list"]])
+            raw_node_feature_list_ = states_[i][0]["raw_node_feature_list"]
+            # exit(1)
 
-            logging.debug("Raw Node Feature List Shape: %s", raw_node_feature_list.shape)
-            logging.debug("Action: %s, Shape: %s", action, action.shape)
-            logging.debug("Reward: %s, Shape: %s", reward, reward.shape)
-            logging.debug("Raw Node Feature List Last Shape: %s", raw_node_feature_list_.shape)
+            logging.debug("OPTIMIZER: Raw Node Feature List Shape: %s", raw_node_feature_list.shape)
+            logging.debug("OPTIMIZER: Action: %s, Shape: %s", action, action.shape)
+            logging.debug("OPTIMIZER: Reward: %s, Shape: %s", reward, reward.shape)
+            logging.debug("OPTIMIZER: Raw Node Feature List Last Shape: %s", raw_node_feature_list_.shape)
 
             if raw_node_feature_list_[0].size == 0:
                 avg_reward = 0.0
             else:
-                avg_reward = self.predict_avg_reward(states[i])
+                avg_reward = self.predict_avg_reward(states[i][0])
             
             reward = reward + self.gamma_n * avg_reward * np.array([state_masks[i]])
 
             logging.debug("==================START TRAINING=================")
-            raw_node_feat_list, actual_probabilities, actual_rewards, minimize, next_hop_probabilities, avg_rewards, grads_and_vars = self._build_next_hop_policy_graph(states[i])
-            feed_dict = {i: d for i, d in zip(raw_node_feat_list, raw_node_feature_list)}
-            feed_dict[actual_probabilities] = action
-            feed_dict[actual_rewards] = reward
-            m, gv = self.session.run([minimize, grads_and_vars], feed_dict=feed_dict)
-            gv = np.array(gv)
-            grad = grad + gv[:, 0]
-            count += len(states[i])
+            with self.lock_model:
+                with self.default_graph.as_default():
+                    raw_node_feat_list, actual_probabilities, actual_rewards, minimize, next_hop_probabilities, avg_rewards, grads_and_vars = self._build_next_hop_policy_graph(states[i][0])
+                    feed_dict = {i: d for i, d in zip(raw_node_feat_list, raw_node_feature_list)}
+                    feed_dict[actual_probabilities] = action
+                    feed_dict[actual_rewards] = reward
+                    m, gv = self.session.run([minimize, grads_and_vars], feed_dict=feed_dict)
+                    gv = np.array(gv)
+                    grad = grad + gv[:, 0]
+                    count += len(states[i])
             logging.debug("==================END TRAINING=================")
         return grad, count
 
@@ -291,16 +302,19 @@ class Brain:
             return probabilities, avg_reward
 
     def predict_prob(self, state):
-        with self.default_graph.as_default():
-            logging.debug("PREDICTING PROB.")
-            logging.debug("Shape of Raw Node Feature List: %s", state["raw_node_feature_list"].shape)
-            raw_node_feature_list, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate, _ = self._build_next_hop_policy_graph(state)
-            probabilities = self.session.run(next_hop_probabilities_estimate, feed_dict={i: d for i, d in zip(raw_node_feature_list, state["raw_node_feature_list"])})
-            return probabilities
+        with self.lock_model:
+            with self.default_graph.as_default():
+                logging.debug("PREDICTING PROB.")
+                logging.debug("Shape of Raw Node Feature List: %s", state["raw_node_feature_list"].shape)
+                raw_node_feature_list, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate, _ = self._build_next_hop_policy_graph(state)
+                probabilities = self.session.run(next_hop_probabilities_estimate, feed_dict={i: d for i, d in zip(raw_node_feature_list, state["raw_node_feature_list"])})
+                return probabilities
 
     def predict_avg_reward(self, state):
-        with self.default_graph.as_default():
-            logging.debug("PREDICTING AVG REWARD.")
-            raw_node_feature_list, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate, _ = self._build_next_hop_policy_graph(state)
-            avg_reward = self.session.run(avg_rewards_estimate, feed_dict={i: d for i, d in zip(raw_node_feature_list, state["raw_node_feature_list"])})
-            return avg_reward
+        with self.lock_model:
+            with self.default_graph.as_default():
+                logging.debug("PREDICTING AVG REWARD.")
+                logging.debug("Shape of Raw Node Feature List: %s", state["raw_node_feature_list"].shape)
+                raw_node_feature_list, actual_probabilities, actual_rewards, minimize, next_hop_probabilities_estimate, avg_rewards_estimate, _ = self._build_next_hop_policy_graph(state)
+                ps, avg_reward = self.session.run([next_hop_probabilities_estimate, avg_rewards_estimate], feed_dict={i: d for i, d in zip(raw_node_feature_list, state["raw_node_feature_list"])})
+                return avg_reward

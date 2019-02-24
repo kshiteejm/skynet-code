@@ -21,7 +21,7 @@ EPS_START = 0.5
 EPS_END  = 0.0
 EPS_STEPS = 50000
 
-MIN_BATCH = 4
+MIN_BATCH = 1
 LEARNING_RATE = 5e-2
 
 LOSS_V = .5         # v loss coefficient
