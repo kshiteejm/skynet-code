@@ -235,7 +235,7 @@ class Brain:
         
         self.train_iteration = self.train_iteration + 1
 
-        logging.debug("OPTIMIZER: =================================== BEGINS ===================================")
+        logging.info("OPTIMIZER: =================================== BEGINS ===================================")
 
         if len(states) > 5*self.min_batch:
             logging.debug("Optimizer alert! Minimizing batch of %d", len(states))
@@ -265,7 +265,7 @@ class Brain:
             
             reward = reward + self.gamma_n * avg_reward * np.array([state_masks[i]])
 
-            logging.debug("==================START TRAINING=================")
+            logging.info("==================START TRAINING=================")
             with self.lock_model:
                 with self.default_graph.as_default():
                     raw_node_feat_list, actual_probabilities, actual_rewards, minimize, next_hop_probabilities, avg_rewards, grads_and_vars = self._build_next_hop_policy_graph(states[i][0])
@@ -276,7 +276,7 @@ class Brain:
                     gv = np.array(gv)
                     grad = grad + gv[:, 0]
                     count += len(states[i])
-            logging.debug("==================END TRAINING=================")
+            logging.info("==================END TRAINING=================")
         return grad, count
 
     def train_push(self, state, action, reward, state_):
