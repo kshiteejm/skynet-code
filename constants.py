@@ -57,7 +57,7 @@ FLOW_ID_PROJ = None
 REACHABILITY_PROJ = None
 
 if os.path.isfile(str('isolation_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES))):
-    ISOLATION_PROJ = np.load('isolation_proj.npy')
+    ISOLATION_PROJ = np.load(str('isolation_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES)))
 else:
     ISOLATION_PROJ = np.random.normal(0.0, 1.0, (POLICY_FEATURE_SIZE, MAX_FLOWS))
     np.save(str('isolation_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES)), ISOLATION_PROJ)
