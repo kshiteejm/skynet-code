@@ -25,7 +25,7 @@ from constants import EPS_END, EPS_START, EPS_STEPS, \
                     TESTING_INSTANCE_LIMIT, THREAD_DELAY, THREADS, \
                     TRAINING_INSTANCE_LIMIT, \
                     MIN_GRAPH_SIZE, MAX_GRAPH_SIZE, MIN_FLOWS, MAX_FLOWS, \
-                    GRAD_NORM_STOP, TOPOLOGIES
+                    GRAD_NORM_STOP, TOPOLOGIES, LOG_FILE
 
 brain = None
 
@@ -180,5 +180,7 @@ if __name__ == '__main__':
     # logger = logging.getLogger('root')
     # FORMAT = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
     # logging.basicConfig(format=FORMAT)
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
+    fh = logging.FileHandler(LOG_FILE)
+    logging.getLogger().addHandler(fh)
     main()

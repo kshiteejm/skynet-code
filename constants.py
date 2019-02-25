@@ -7,6 +7,7 @@ import numpy as np
 
 #-- constants
 ENV = 'Skynet-v0'
+LOG_FILE = "skynet.log"
 
 RUN_TIME = 60
 THREADS = 1
@@ -32,9 +33,9 @@ PER_INSTANCE_LIMIT = 10
 MODEL_VERSION = 1   # state-dependent
 
 TOPOLOGIES = ['fat_tree']
-MIN_GRAPH_SIZE = 6
-MAX_GRAPH_SIZE = 6
-MIN_FLOWS = 10
+MIN_GRAPH_SIZE = 3
+MAX_GRAPH_SIZE = 10
+MIN_FLOWS = 1
 MAX_FLOWS = 10
 MAX_SWITCHES =  (MAX_GRAPH_SIZE * MAX_GRAPH_SIZE * 5) // 4
 
