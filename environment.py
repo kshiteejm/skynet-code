@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import logging
 import time
+from timeit import default_timer as timer
 import itertools
 import threading
 
@@ -90,8 +91,15 @@ class Environment(threading.Thread):
             
             logging.debug("ENV_THREAD %s: State:  %s", self.thread_id, str(state))
 
+            start_time = timer()
             action, is_rand = self.agent.act(state)
+            end_time = timer()
+            logging.info("ENV_THREAD %s: Time to Sample Action: %s", self.thread_id, (end_time - start_time))
+
+            start_time = timer()
             state_, reward, done, info = self.env.step(action)
+            end_time = timer()
+            logging.info("ENV_THREAD %s: Time to Step in Environment: %s", self.thread_id, (end_time - start_time))
 
             logging.debug("ENV_THREAD %s: Action: %s, Random: %s", self.thread_id, str(action), str(is_rand))
             logging.debug("ENV_THREAD %s: Reward: %s", self.thread_id, str(reward))

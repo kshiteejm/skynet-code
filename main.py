@@ -180,7 +180,7 @@ if __name__ == '__main__':
     # logger = logging.getLogger('root')
     # FORMAT = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
     # logging.basicConfig(format=FORMAT)
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     fh = logging.FileHandler(LOG_FILE)
     logging.getLogger().addHandler(fh)
     main()
