@@ -52,32 +52,40 @@ class Brain:
         self.net_width = net_width
         
         self.default_graph = tf.get_default_graph()
-    
+
+    def featurize_node(self, raw_node_feature, neighbor_features): 
+        summarized_neighbor_features = tf.reduce_sum(neighbor_features, axis=0)
+        with tf.variable_scope("featurize_node", reuse=tf.AUTO_REUSE):
+            dense_neighbor_layer = tf.layers.dense(tf.expand_dims(summarized_neighbor_features, 0), self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_neighbors")
+            dense_node_layer = tf.layers.dense(tf.expand_dims(raw_node_feature, 0), self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_node")
+            dense_neighbor_layer = tf.squeeze(dense_neighbor_layer, axis=[0])
+            dense_node_layer = tf.squeeze(dense_node_layer, axis=[0])
+            updated_node_feature = tf.reduce_sum([dense_node_layer, dense_neighbor_layer], axis=0)
+            return updated_node_feature
+
+    def get_all_node_features(self, index, out_features, raw_node_features, node_features, topology):
+        zero = tf.constant(0, dtype=tf.float32)
+        neighbor_info = tf.gather(topology, index)
+        raw_node_feature = tf.gather(raw_node_features, index)
+        neighbor_indices = tf.where(tf.not_equal(neighbor_info, zero))
+        neighbor_features = tf.gather(node_features, neighbor_indices)
+        new_node_feature = self.featurize_node(raw_node_feature, neighbor_features)
+        return [tf.add(index, 1), tf.concat([[new_node_feature], out_features], axis=1), raw_node_features, node_features, topology]
+
     # featurize for a single flow graph
     def _build_featurize_graph(self, topology, raw_node_feature_size):
-        input_node_features = tf.placeholder(tf.float32, shape=(topology.shape[0], raw_node_feature_size))
-        all_node_features = tf.zeros((topology.shape[0], self.node_feature_size))
+        input_node_features = tf.placeholder(tf.float32, shape=(tf.shape(topology)[0], raw_node_feature_size))
+        all_node_features = tf.zeros((tf.shape(topology)[0], self.node_feature_size))
         for _ in range(self.gnn_rounds):
-            next_node_features = []
-            for node, edge_list in enumerate(topology):
-                ngbr_node_features = tf.boolean_mask(all_node_features, edge_list, axis=0)
-                summed_ngbr_node_features = tf.reduce_sum(ngbr_node_features, axis=0)
-                node_features = input_node_features[node]
-                # Assumption: This will cause the thetas to be reused over multiple rounds, and multiple data points
-                with tf.variable_scope("featurize_ngbrs", reuse=tf.AUTO_REUSE):
-                    dense_ngbr_layer = tf.layers.dense(tf.expand_dims(summed_ngbr_node_features, 0), self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_ngbrs")
-                    dense_node_layer = tf.layers.dense(tf.expand_dims(node_features, 0), self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_node")
-                    dense_ngbr_layer = tf.squeeze(dense_ngbr_layer, axis=[0])
-                    dense_node_layer = tf.squeeze(dense_node_layer, axis=[0])
-                    updated_node_feature = tf.reduce_sum([dense_node_layer, dense_ngbr_layer], axis=0)
-                    next_node_features.append(updated_node_feature)
-            all_node_features = tf.convert_to_tensor(next_node_features)
+            node_index = tf.constant(0)
+            out_features = tf.Variable([])
+            condition = lambda index, out_features, raw_node_features, node_features, topology: tf.less(index, tf.shape(topology)[0])
+            _, next_node_features, _, _, _ = tf.while_loop(condition, self.get_all_node_features, [node_index, out_features, input_node_features, all_node_features, topology])
+            all_node_features = next_node_features
             # print(all_node_features)
         return input_node_features, all_node_features
 
     def _build_next_hop_priority_graph(self, inputs):
-        # inputs = tf.expand_dims(inputs, 0)
-
         with tf.variable_scope("priority_graph", reuse=tf.AUTO_REUSE): 
             if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
                 print_op = tf.print(Colorize.highlight("Priority Graph: Input Hops:"), inputs, ":Shape:", tf.shape(inputs))
@@ -110,7 +118,8 @@ class Brain:
             return out_priority
 
     def _build_next_hop_policy_graph(self, state):
-        topology = state["topology"]
+        topology = tf.placeholder(tf.float32, shape=(None, None))
+        # topology = state["topology"]
         num_flows = state["isolation"].shape[0]
         next_hop_indices = state["next_hop_indices"]
         raw_node_feature_size = state["raw_node_feature_list"].shape[-1]
