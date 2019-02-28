@@ -158,21 +158,23 @@ class Environment(threading.Thread):
 
     @staticmethod
     def getPolicyFeatures(state):
-        num_flows = state['isolation'].shape[1]
+        num_flows = state['num_flows']
         isolation = state['isolation']
+        print('ISOLATION', num_flows, isolation.shape, ISOLATION_PROJ.shape)
         isolation = ISOLATION_PROJ[:, :num_flows] @ isolation
-
         print(isolation.shape)
 
-        num_switches = state['reachability'].shape[1]
-        reachability = state['reachability']
-        reachability = REACHABILITY_PROJ[:, :num_switches] @ reachability
-        print(reachability.shape)
-
-        id_one_hot = FLOW_ID_PROJ[:, :num_flows] #Essentially multiplying with Identity.
+        #Essentially multiplying with Identity.
+        id_one_hot = FLOW_ID_PROJ[:, :num_flows] 
         print(id_one_hot.shape)
 
-        policy_features = np.hstack([isolation, reachability, id_one_hot])
+        num_switches = state['num_switches']
+        reachability = state['reachability']
+        print('REACHABILITY', num_switches, reachability.shape, REACHABILITY_PROJ.shape)
+        reachability = REACHABILITY_PROJ[:, :num_switches] @ reachability.transpose()
+        print(reachability.shape)
+
+        policy_features = np.vstack([isolation, reachability, id_one_hot]).transpose()
         print(policy_features.shape)
 
         return policy_features

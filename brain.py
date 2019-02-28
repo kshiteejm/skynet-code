@@ -13,7 +13,7 @@ import tensorflow as tf
 from environment import Environment
 from constants import GAMMA, LEARNING_RATE, N_STEP_RETURN, MIN_BATCH, LOSS_V, LOSS_ENTROPY, \
                     NODE_FEATURE_SIZE, GNN_ROUNDS, POLICY_FEATURE_SIZE, NET_WIDTH, Colorize, \
-                    RAW_NODE_FEAT_SIZE
+                    RAW_NODE_FEATURE_SIZE
 
 class Brain:
     # train_queue = [ [[], [], []], [], [], [[], [], []], [] ]    # s, a, r, s', s' terminal mask
@@ -25,7 +25,7 @@ class Brain:
                 learning_rate=LEARNING_RATE, min_batch=MIN_BATCH, loss_v=LOSS_V, 
                 loss_entropy=LOSS_ENTROPY, node_feature_size=NODE_FEATURE_SIZE,
                 gnn_rounds=GNN_ROUNDS, policy_feature_size=POLICY_FEATURE_SIZE,
-                net_width=NET_WIDTH, raw_node_feat_size=RAW_NODE_FEAT_SIZE):
+                net_width=NET_WIDTH, raw_node_feat_size=RAW_NODE_FEATURE_SIZE):
         self.train_iteration = 0
 
         self.gamma = gamma
@@ -59,23 +59,21 @@ class Brain:
         self.default_graph = tf.get_default_graph()
 
     def featurize_node(self, raw_node_feature, neighbor_features): 
-        summarized_neighbor_features = tf.reduce_sum(neighbor_features, axis=0)
+        summarized_neighbor_features = tf.expand_dims(tf.reduce_sum(neighbor_features, axis=0), 0)
         with tf.variable_scope("featurize_node", reuse=tf.AUTO_REUSE):
             dense_neighbor_layer = tf.layers.dense(summarized_neighbor_features, 
                 self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_neighbors")
-            dense_node_layer = tf.layers.dense(tf.expand_dims(raw_node_feature, 0), 
+            dense_node_layer = tf.layers.dense(tf.expand_dims(raw_node_feature, 0),
                 self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_node")
-            dense_neighbor_layer = tf.squeeze(dense_neighbor_layer, axis=[0])
-            dense_node_layer = tf.squeeze(dense_node_layer, axis=[0])
+            # dense_neighbor_layer = tf.squeeze(dense_neighbor_layer, axis=[0])
+            # dense_node_layer = tf.squeeze(dense_node_layer, axis=[0])
             updated_node_feature = tf.reduce_sum([dense_node_layer, dense_neighbor_layer], axis=0)
             return updated_node_feature
 
     def get_all_node_features(self, index, out_features, raw_node_features, node_features, topology):
-        zero = tf.constant(0, dtype=tf.float32)
         neighbor_info = tf.gather(topology, index)
         raw_node_feature = tf.gather(raw_node_features, index)
-        neighbor_indices = tf.where(tf.not_equal(neighbor_info, zero))
-        neighbor_features = tf.gather(node_features, neighbor_indices)
+        neighbor_features = tf.boolean_mask(node_features, neighbor_info)
         new_node_feature = self.featurize_node(raw_node_feature, neighbor_features)
         return [tf.add(index, 1), 
         tf.concat([new_node_feature, out_features], axis=0), raw_node_features, node_features, topology]
@@ -86,12 +84,13 @@ class Brain:
         all_node_features = tf.zeros((tf.shape(topology)[0], self.node_feature_size))
         for _ in range(self.gnn_rounds):
             node_index = tf.constant(0)
-            out_features = tf.Variable([])
+            # Shapely skullduggery.
+            out_features = tf.Variable(np.empty((0, self.node_feature_size), dtype=np.float32), dtype=tf.float32)
             condition = (lambda index, out_features, raw_node_features, node_features, topology: 
                             tf.less(index, tf.shape(topology)[0]))
             _, next_node_features, _, _, _ = tf.while_loop(condition, self.get_all_node_features, 
                 [node_index, out_features, input_node_features, all_node_features, topology],
-                shape_invariants=[node_index.get_shape(), tf.TensorShape([None]),
+                shape_invariants=[node_index.get_shape(), tf.TensorShape([None, self.node_feature_size]),
                     input_node_features.get_shape(), all_node_features.get_shape(), topology.get_shape()])
             all_node_features = next_node_features
             # print(all_node_features)
@@ -149,7 +148,6 @@ class Brain:
         else:
             next_hop_features = tf.gather(node_features, next_hop_indices)
 
-
         print_op_nhf = tf.print("BRAIN: TF: Per Flow Next Hop Features: ", next_hop_features)
         policy_features = tf.gather(all_policy_features, flow_id)
         priority_features = tf.map_fn(lambda x: tf.concat([x, policy_features], axis=0), next_hop_features)        
@@ -158,15 +156,19 @@ class Brain:
             with tf.control_dependencies([print_op_nhf]):
                 priority_features = tf.identity(priority_features)
 
-        print_op = tf.cond(is_empty, true_fn=lambda: tf.print("BRAIN: No Next Hop Features for Flow", flow_id))
+        print_op = tf.cond(is_empty, true_fn=lambda: tf.print("BRAIN: No Next Hop Features for Flow", flow_id),
+                            false_fn=lambda: tf.print("BRAIN: Building Next Hop Features for Flow", flow_id))
 
         with tf.control_dependencies([print_op]):
             nf = tf.cond(is_empty, true_fn=lambda: node_feature_list, 
-                            false_fn=lambda: tf.concat([node_feature_list, tf.expand_dims(node_features, 0)], axis=0))
+                            false_fn=lambda: tf.concat([node_feature_list, tf.expand_dims(node_features, 0)], axis=0),
+                            name="node_features_concat")
             nhf = tf.cond(is_empty, true_fn=lambda: next_hop_feature_list, 
-                            false_fn=lambda: tf.concat([next_hop_feature_list, tf.expand_dims(next_hop_features, 0)], axis=0))
+                            false_fn=lambda: tf.concat([next_hop_feature_list, next_hop_features], axis=0),
+                            name="next_hop_features_concat")
             prf = tf.cond(is_empty, true_fn=lambda: priority_feature_list, 
-                            false_fn=lambda: tf.concat([priority_feature_list, priority_features], axis=0))
+                            false_fn=lambda: tf.concat([priority_feature_list, priority_features], axis=0),
+                            name="priority_features_concat")
         
         return [tf.add(flow_id, 1), topology, all_next_hop_indices, all_policy_features, all_raw_node_features, nf, nhf, prf]
         
@@ -183,11 +185,24 @@ class Brain:
         cond = lambda i, topo, anhi, apf, arnf, nfl, nhfl, pfl : tf.less(i, num_flows)
         body = self._build_per_flow_feature_graph
         loop_vars = [flow_id, topology, all_next_hop_indices, all_policy_features, 
-                        all_raw_node_features, tf.Variable([]), tf.Variable([]),
-                        tf.Variable([])]
+                        all_raw_node_features, 
+                        tf.Variable(np.empty((0, 0, self.node_feature_size), dtype=np.float32), dtype=tf.float32),
+                        tf.Variable(np.empty((0, self.node_feature_size), dtype=np.float32), dtype=tf.float32),
+                        tf.Variable(np.empty((0, self.feature_size), dtype=np.float32), dtype=tf.float32)
+                    ]
+        shape_invariants = [
+                                flow_id.get_shape(), 
+                                topology.get_shape(), 
+                                all_next_hop_indices.get_shape(),
+                                all_policy_features.get_shape(),
+                                all_raw_node_features.get_shape(),
+                                tf.TensorShape([None, None, self.node_feature_size]),
+                                tf.TensorShape([None, self.node_feature_size]),   
+                                tf.TensorShape([None, self.feature_size])
+                            ]
 
         _, _, _, _, _, node_features, next_hop_features, priority_features = \
-            tf.while_loop(cond, body, loop_vars)
+            tf.while_loop(cond, body, loop_vars, shape_invariants=shape_invariants)
         
         priority_features = tf.expand_dims(priority_features, 0)
         next_hop_features = tf.expand_dims(next_hop_features, 0)

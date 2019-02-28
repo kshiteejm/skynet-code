@@ -52,29 +52,29 @@ NODE_FEATURE_SIZE = 16
 GNN_ROUNDS = 4
 NET_WIDTH = 16
 POLICY_FEATURE_SIZE = 16
-RAW_NODE_FEAT_SIZE = 2
+RAW_NODE_FEATURE_SIZE = 2
 
 ISOLATION_PROJ = None
 FLOW_ID_PROJ = None
 REACHABILITY_PROJ = None
 
-if os.path.isfile(str('isolation_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES))):
-    ISOLATION_PROJ = np.load(str('isolation_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES)))
+if os.path.isfile(str('isolation_proj_%s_%s.npy' % (POLICY_FEATURE_SIZE, MAX_FLOWS))):
+    ISOLATION_PROJ = np.load(str('isolation_proj_%s_%s.npy' % (POLICY_FEATURE_SIZE, MAX_FLOWS)))
 else:
     ISOLATION_PROJ = np.random.normal(0.0, 1.0, (POLICY_FEATURE_SIZE, MAX_FLOWS))
-    np.save(str('isolation_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES)), ISOLATION_PROJ)
+    np.save(str('isolation_proj_%s_%s.npy' % (POLICY_FEATURE_SIZE, MAX_FLOWS)), ISOLATION_PROJ)
 
-if os.path.isfile(str('flow_id_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES))):
-    FLOW_ID_PROJ = np.load(str('flow_id_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES)))
+if os.path.isfile(str('flow_id_proj_%s_%s.npy' % (POLICY_FEATURE_SIZE, MAX_FLOWS))):
+    FLOW_ID_PROJ = np.load(str('flow_id_proj_%s_%s.npy' % (POLICY_FEATURE_SIZE, MAX_FLOWS)))
 else:
     FLOW_ID_PROJ = np.random.normal(0.0, 1.0, (POLICY_FEATURE_SIZE, MAX_FLOWS))
-    np.save(str('flow_id_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES)), FLOW_ID_PROJ)
+    np.save(str('flow_id_proj_%s_%s.npy' % (POLICY_FEATURE_SIZE, MAX_FLOWS)), FLOW_ID_PROJ)
 
-if os.path.isfile(str('reachability_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES))):
-    REACHABILITY_PROJ = np.load(str('reachability_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES)))
+if os.path.isfile(str('reachability_proj_%s_%s.npy' % (POLICY_FEATURE_SIZE, MAX_SWITCHES))):
+    REACHABILITY_PROJ = np.load(str('reachability_proj_%s_%s.npy' % (POLICY_FEATURE_SIZE, MAX_SWITCHES)))
 else:
     REACHABILITY_PROJ = np.random.normal(0.0, 1.0, (POLICY_FEATURE_SIZE, MAX_SWITCHES))
-    np.save(str('reachability_proj_%s_%s.npy' % (MAX_FLOWS, MAX_SWITCHES)), REACHABILITY_PROJ)
+    np.save(str('reachability_proj_%s_%s.npy' % (POLICY_FEATURE_SIZE, MAX_SWITCHES)), REACHABILITY_PROJ)
 
 class Colorize:
     RED = '\033[91m'

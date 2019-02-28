@@ -21,16 +21,18 @@ POS_INF = 100.0
 # MIN_GRAPH_SIZE = 5
 # MAX_GRAPH_SIZE = 60
 
-from constants import RAW_NODE_FEAT_SIZE
+from constants import RAW_NODE_FEATURE_SIZE
 
 class SkynetEnv(gym.Env):
 
-    def __init__(self, topo_size=2, num_flows=1, topo_style='fat_tree', deterministic=False, raw_node_feature_list=None):
+    def __init__(self, topo_size=2, num_flows=1, topo_style='fat_tree', 
+        deterministic=False, raw_node_feature_list=None, raw_node_feature_size=RAW_NODE_FEATURE_SIZE):
         self.__version__ = "0.1.0"
        
         self.is_game_over = False
         self.topo_scale_factor = topo_size
 
+        self.topo_style = topo_style
         # topology state
         if topo_style == 'std_dcn':
             self.num_edge_switches = self.topo_scale_factor*self.topo_scale_factor
@@ -68,7 +70,7 @@ class SkynetEnv(gym.Env):
         self._init_isolation_policies(deterministic=deterministic)
 
         # visited, can_visit
-        self.raw_node_feature_size = 2 
+        self.raw_node_feature_size = raw_node_feature_size
 
         # # node (per-switch) features
         # self.raw_node_feature_list = raw_node_feature_list
@@ -93,6 +95,9 @@ class SkynetEnv(gym.Env):
 
         # state:
         self.state = dict(
+            num_flows=self.num_flows,
+            num_switches=self.num_switches,
+            topo_style=self.topo_style,
             topology=np.zeros((self.num_switches, self.num_switches)),
             routes=np.zeros((self.num_flows, self.num_switches)),
             reachability=np.zeros((self.num_flows, self.num_switches)),
@@ -117,6 +122,9 @@ class SkynetEnv(gym.Env):
 
     def _init_state(self):
         self.state = dict(
+            num_flows=self.num_flows,
+            num_switches=self.num_switches,
+            topo_style=self.topo_style,
             topology=np.zeros((self.num_switches, self.num_switches)),
             routes=np.zeros((self.num_flows, self.num_switches)),
             reachability=np.zeros((self.num_flows, self.num_switches)),
@@ -152,7 +160,6 @@ class SkynetEnv(gym.Env):
         # update per-flow raw node features
         self.raw_node_feature_list = self._generate_raw_node_feature_list()
         self.state["raw_node_feature_list"] = np.array(self.raw_node_feature_list)
-        assert self.state["raw_node_feature_list"].shape == (self.num_switches, RAW_NODE_FEAT_SIZE)
 
         # update next hop indices
         self.next_hop_indices = self.get_next_hop_indices()
@@ -172,7 +179,13 @@ class SkynetEnv(gym.Env):
         isolation = self.state["isolation"]
         raw_node_feature_list = self.state["raw_node_feature_list"]
         # next_hop_indices = self.state["next_hop_indices"]
-        return dict(topology=np.array(topology), routes=np.zeros(routes.shape), reachability=np.zeros(reachability.shape), isolation=np.zeros(isolation.shape), raw_node_feature_list=np.zeros(raw_node_feature_list.shape), next_hop_indices=np.array([]))
+        return dict(num_flows=self.num_flows, num_switches=self.num_switches, 
+            topo_style=self.topo_style, topology=np.array(topology), 
+            routes=np.zeros(routes.shape), 
+            reachability=np.zeros(reachability.shape), 
+            isolation=np.zeros(isolation.shape), 
+            raw_node_feature_list=np.zeros(raw_node_feature_list.shape), 
+            next_hop_indices=np.array([]))
     
     # random endpoints for flows in the network
     def _init_flow_details(self, initialize=True, deterministic=False):
@@ -631,7 +644,11 @@ class SkynetEnv(gym.Env):
         if len(self.completed_flows) == self.num_flows or self.is_game_over:
             done = True
         
-        return dict(topology=np.array(topology), routes=np.array(routes), reachability=np.array(reachability), isolation=np.array(self.state["isolation"]), raw_node_feature_list=np.array(self.state["raw_node_feature_list"]), next_hop_indices=np.array(self.state["next_hop_indices"])), reward, done, {}
+        return dict(num_flows=self.num_flows, num_switches=self.num_switches,
+            topo_style=self.topo_style, topology=np.array(topology), routes=np.array(routes), 
+            reachability=np.array(reachability), isolation=np.array(self.state["isolation"]), 
+            raw_node_feature_list=np.array(self.state["raw_node_feature_list"]), 
+            next_hop_indices=np.array(self.state["next_hop_indices"])), reward, done, {}
 
     # def step(self, action):
     #     # assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
@@ -694,7 +711,11 @@ class SkynetEnv(gym.Env):
         # next_hop_features = self.state["next_hop_features"]
         raw_node_feature_list = self.state["raw_node_feature_list"]
         next_hop_indices = self.state["next_hop_indices"]
-        return dict(topology=np.array(topology), routes=np.array(routes), reachability=np.array(reachability), isolation=np.array(isolation), raw_node_feature_list=np.array(raw_node_feature_list), next_hop_indices=np.array(next_hop_indices))
+        return dict(num_flows=self.num_flows, num_switches=self.num_switches,
+            topo_style=self.topo_style, topology=np.array(topology), routes=np.array(routes), 
+            reachability=np.array(reachability), isolation=np.array(isolation), 
+            raw_node_feature_list=np.array(raw_node_feature_list), 
+            next_hop_indices=np.array(next_hop_indices))
 
     def seed(self, seed=None):
         random.seed(seed)
