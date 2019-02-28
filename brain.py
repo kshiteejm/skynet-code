@@ -134,7 +134,7 @@ class Brain:
     def _build_per_flow_feature_graph(self, flow_id, topology, all_next_hop_indices, all_policy_features, 
             all_raw_node_features, node_feature_list, next_hop_feature_list, priority_feature_list):
         next_hop_indices = tf.gather(all_next_hop_indices, flow_id)
-        is_empty = tf.equal(tf.size(next_hop_indices), 0)
+        is_empty = tf.equal(tf.reduce_sum(next_hop_indices), 0)
         
         raw_node_features = tf.gather(all_raw_node_features, flow_id)
         node_features = self._build_featurize_graph(topology, raw_node_features)
@@ -143,9 +143,9 @@ class Brain:
         
         if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
             with tf.control_dependencies([print_op_nf]):
-                next_hop_features = tf.gather(node_features, next_hop_indices)
+                next_hop_features = tf.boolean_mask(node_features, next_hop_indices)
         else:
-            next_hop_features = tf.gather(node_features, next_hop_indices)
+            next_hop_features = tf.boolean_mask(node_features, next_hop_indices)
 
         print_op_nhf = tf.print("BRAIN: TF: Per Flow Next Hop Features: ", next_hop_features)
         policy_features = tf.gather(all_policy_features, flow_id)
@@ -353,12 +353,9 @@ class Brain:
             logging.info("==================START TRAINING=================")
             # with self.lock_model:
             with self.default_graph.as_default():
-                start_time = timer()
-                end_time = timer()
-                logging.info("OPTIMIZER: Time to build Training Graph: %s", (end_time - start_time))
-                # feed_dict = {i: d for i, d in zip(raw_node_feat_list, raw_node_feature_list)}
                 feed_dict[actual_probabilities] = action
                 feed_dict[actual_rewards] = reward
+                logging.debug("OPTIMIZER: FEED_DICT: %s", feed_dict)
                 start_time = timer()
                 m, gv = self.session.run([minimize, grads_and_vars], feed_dict=feed_dict)
                 end_time = timer()

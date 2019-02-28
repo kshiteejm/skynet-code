@@ -409,9 +409,10 @@ class SkynetEnv(gym.Env):
             return False
     
     def get_next_hop_indices(self):
-        next_hop_indices = []
-        for i in range(self.num_flows):
-            next_hop_indices.append([])
+        # next_hop_indices = []
+        next_hop_indices = np.zeros((self.num_flows, self.num_switches))
+        # for i in range(self.num_flows):
+        #     next_hop_indices.append([])
         routes = self.state["routes"]
         # logging.debug("GYM_ENV: Routes: %s", np.array(routes))
         for flow_id in self.incomplete_flows:
@@ -427,9 +428,10 @@ class SkynetEnv(gym.Env):
                         if switch_id in group:
                             reachable_to_dst_next_switch_ids.append(switch_id)
             for switch_id in reachable_to_dst_next_switch_ids:
-                next_hop_indices[flow_id-1].append(switch_id-1)
+                # next_hop_indices[flow_id-1].append(switch_id-1)
+                next_hop_indices[flow_id-1][switch_id-1] = 1
         # logging.debug("GYM_ENV: Next Hop Indices: %s", np.array(next_hop_indices))
-        return np.array(next_hop_indices)
+        return next_hop_indices
 
     def get_next_hop_features(self):
         routes = self.state["routes"]
@@ -498,9 +500,15 @@ class SkynetEnv(gym.Env):
 
     def get_random_next_hop(self, p=None):
         next_hop_details = []
-        for flow_id in range(1, len(self.next_hop_indices)+1):
-            for switch_index in self.next_hop_indices[flow_id-1]:
-                next_hop_details.append((flow_id, switch_index+1))
+        for flow_id in range(1, self.num_flows+1):
+            for switch_id in range(1, self.num_switches+1):
+                if self.next_hop_indices[flow_id-1][switch_id-1] == 1:
+                    next_hop_details.append((flow_id, switch_id))
+        
+        # for flow_id in range(1, len(self.next_hop_indices)+1):
+        #     for switch_index in self.next_hop_indices[flow_id-1]:
+        #         next_hop_details.append((flow_id, switch_index+1))
+        
         random_next_hop_index = np.random.choice(list(range(0, len(next_hop_details))), p=p)
         return next_hop_details[random_next_hop_index], len(next_hop_details), random_next_hop_index
 
