@@ -157,19 +157,22 @@ class Environment(threading.Thread):
         return self.env.state["raw_node_feature_list"]
 
     @staticmethod
-    def getPolicyFeatures(state, flow_id):
+    def getPolicyFeatures(state):
         num_flows = state['isolation'].shape[1]
-        isolation = state['isolation'][flow_id]
+        isolation = state['isolation']
         isolation = ISOLATION_PROJ[:, :num_flows] @ isolation
 
+        print(isolation.shape)
+
         num_switches = state['reachability'].shape[1]
-        reachability = state['reachability'][flow_id]
+        reachability = state['reachability']
         reachability = REACHABILITY_PROJ[:, :num_switches] @ reachability
+        print(reachability.shape)
 
-        id_one_hot = np.zeros(num_flows, dtype=np.float32)
-        id_one_hot[flow_id] = 1.0
-        id_one_hot = FLOW_ID_PROJ[:, :num_flows] @ id_one_hot
+        id_one_hot = FLOW_ID_PROJ[:, :num_flows] #Essentially multiplying with Identity.
+        print(id_one_hot.shape)
 
-        policy_features = np.array([isolation, reachability, id_one_hot]).flatten()
+        policy_features = np.hstack([isolation, reachability, id_one_hot])
+        print(policy_features.shape)
 
         return policy_features
