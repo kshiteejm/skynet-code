@@ -58,11 +58,10 @@ class Brain:
         self.session.run(tf.global_variables_initializer())
         self.default_graph = tf.get_default_graph()
 
-
     def featurize_node(self, raw_node_feature, neighbor_features): 
         summarized_neighbor_features = tf.reduce_sum(neighbor_features, axis=0)
         with tf.variable_scope("featurize_node", reuse=tf.AUTO_REUSE):
-            dense_neighbor_layer = tf.layers.dense(tf.expand_dims(summarized_neighbor_features, 0), 
+            dense_neighbor_layer = tf.layers.dense(summarized_neighbor_features, 
                 self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_neighbors")
             dense_node_layer = tf.layers.dense(tf.expand_dims(raw_node_feature, 0), 
                 self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_node")
@@ -79,7 +78,7 @@ class Brain:
         neighbor_features = tf.gather(node_features, neighbor_indices)
         new_node_feature = self.featurize_node(raw_node_feature, neighbor_features)
         return [tf.add(index, 1), 
-        tf.concat([[new_node_feature], out_features], axis=1), raw_node_features, node_features, topology]
+        tf.concat([new_node_feature, out_features], axis=0), raw_node_features, node_features, topology]
 
     # featurize for a single flow graph
     def _build_featurize_graph(self, topology, input_node_features):
@@ -91,7 +90,9 @@ class Brain:
             condition = (lambda index, out_features, raw_node_features, node_features, topology: 
                             tf.less(index, tf.shape(topology)[0]))
             _, next_node_features, _, _, _ = tf.while_loop(condition, self.get_all_node_features, 
-                [node_index, out_features, input_node_features, all_node_features, topology])
+                [node_index, out_features, input_node_features, all_node_features, topology],
+                shape_invariants=[node_index.get_shape(), tf.TensorShape([None]),
+                    input_node_features.get_shape(), all_node_features.get_shape(), topology.get_shape()])
             all_node_features = next_node_features
             # print(all_node_features)
         return all_node_features
