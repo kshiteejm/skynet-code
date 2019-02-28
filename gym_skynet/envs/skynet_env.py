@@ -21,6 +21,8 @@ POS_INF = 100.0
 # MIN_GRAPH_SIZE = 5
 # MAX_GRAPH_SIZE = 60
 
+from constants import RAW_NODE_FEAT_SIZE
+
 class SkynetEnv(gym.Env):
 
     def __init__(self, topo_size=2, num_flows=1, topo_style='fat_tree', deterministic=False, raw_node_feature_list=None):
@@ -150,6 +152,7 @@ class SkynetEnv(gym.Env):
         # update per-flow raw node features
         self.raw_node_feature_list = self._generate_raw_node_feature_list()
         self.state["raw_node_feature_list"] = np.array(self.raw_node_feature_list)
+        assert self.state["raw_node_feature_list"].shape == (self.num_switches, RAW_NODE_FEAT_SIZE)
 
         # update next hop indices
         self.next_hop_indices = self.get_next_hop_indices()

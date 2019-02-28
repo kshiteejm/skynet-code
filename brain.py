@@ -12,7 +12,8 @@ import tensorflow as tf
 
 from environment import Environment
 from constants import GAMMA, LEARNING_RATE, N_STEP_RETURN, MIN_BATCH, LOSS_V, LOSS_ENTROPY, \
-                    NODE_FEATURE_SIZE, GNN_ROUNDS, POLICY_FEATURE_SIZE, NET_WIDTH, Colorize
+                    NODE_FEATURE_SIZE, GNN_ROUNDS, POLICY_FEATURE_SIZE, NET_WIDTH, Colorize, \
+                    RAW_NODE_FEAT_SIZE
 
 class Brain:
     # train_queue = [ [[], [], []], [], [], [[], [], []], [] ]    # s, a, r, s', s' terminal mask
@@ -24,7 +25,7 @@ class Brain:
                 learning_rate=LEARNING_RATE, min_batch=MIN_BATCH, loss_v=LOSS_V, 
                 loss_entropy=LOSS_ENTROPY, node_feature_size=NODE_FEATURE_SIZE,
                 gnn_rounds=GNN_ROUNDS, policy_feature_size=POLICY_FEATURE_SIZE,
-                net_width=NET_WIDTH):
+                net_width=NET_WIDTH, raw_node_feat_size=RAW_NODE_FEAT_SIZE):
         self.train_iteration = 0
 
         self.gamma = gamma
@@ -49,7 +50,7 @@ class Brain:
         self.policy_feature_size = 3 * policy_feature_size
         self.feature_size = self.policy_feature_size + self.node_feature_size
 
-        self.raw_node_feat_size = 3 * policy_feature_size #ToDo Check up!
+        self.raw_node_feat_size = raw_node_feat_size
         self.net_width = net_width
         
         self.next_hop_policy_graph = self._build_next_hop_policy_graph()
@@ -136,6 +137,7 @@ class Brain:
         is_empty = tf.equal(tf.size(next_hop_indices), 0)
         
         raw_node_features = tf.gather(all_raw_node_features, flow_id)
+        raw_node_features = tf.expand_dims(raw_node_features, axis=0)
         node_features = self._build_featurize_graph(topology, raw_node_features)
         print_op_nf = tf.print("BRAIN: TF: Raw Node Features:", raw_node_features,
             "BRAIN: TF: Output Node Features: ", node_features)
@@ -170,11 +172,11 @@ class Brain:
 
     def _build_next_hop_policy_graph(self):
         topology = tf.placeholder(tf.float32, shape=(None, None)) # topology = state["topology"]
-        num_flows = tf.placeholder(tf.int32, shape=(1,)) #state["isolation"].shape[0]
+        num_flows = tf.placeholder(tf.int32) #state["isolation"].shape[0]
         
-        all_next_hop_indices = tf.placeholder(tf.int32, shape=(num_flows, None)) #state["next_hop_indices"]
-        all_policy_features = tf.placeholder(tf.float32, shape=(num_flows, self.policy_feature_size))
-        all_raw_node_features = tf.placeholder(tf.float32, shape=(tf.shape(topology)[0], self.raw_node_feat_size))
+        all_next_hop_indices = tf.placeholder(tf.int32, shape=(None, None)) #state["next_hop_indices"]
+        all_policy_features = tf.placeholder(tf.float32, shape=(None, self.policy_feature_size))
+        all_raw_node_features = tf.placeholder(tf.float32, shape=(None, self.raw_node_feat_size))
 
         flow_id = tf.constant(0)
         cond = lambda i, topo, anhi, apf, arnf, nfl, nhfl, pfl : tf.less(i, num_flows)
