@@ -137,7 +137,6 @@ class Brain:
         is_empty = tf.equal(tf.size(next_hop_indices), 0)
         
         raw_node_features = tf.gather(all_raw_node_features, flow_id)
-        raw_node_features = tf.expand_dims(raw_node_features, axis=0)
         node_features = self._build_featurize_graph(topology, raw_node_features)
         print_op_nf = tf.print("BRAIN: TF: Raw Node Features:", raw_node_features,
             "BRAIN: TF: Output Node Features: ", node_features)
@@ -179,7 +178,7 @@ class Brain:
         
         all_next_hop_indices = tf.placeholder(tf.int32, shape=(None, None)) #state["next_hop_indices"]
         all_policy_features = tf.placeholder(tf.float32, shape=(None, self.policy_feature_size))
-        all_raw_node_features = tf.placeholder(tf.float32, shape=(None, self.raw_node_feat_size))
+        all_raw_node_features = tf.placeholder(tf.float32, shape=(None, None, self.raw_node_feat_size))
 
         flow_id = tf.constant(0)
         cond = lambda i, topo, anhi, apf, arnf, nfl, nhfl, pfl : tf.less(i, num_flows)
