@@ -167,12 +167,14 @@ class Brain:
         
 
     def _build_next_hop_policy_graph(self):
-        topology = tf.placeholder(tf.float32, shape=(None, None))
-        num_flows = tf.placeholder(tf.int32)
+        topology = tf.placeholder(tf.float32, shape=(None, None), name="topology")
+        num_flows = tf.placeholder(tf.int32, name="num_flows")
         
-        all_next_hop_indices = tf.placeholder(tf.int32, shape=(None, None))
-        all_policy_features = tf.placeholder(tf.float32, shape=(None, self.policy_feature_size))
-        all_raw_node_features = tf.placeholder(tf.float32, shape=(None, None, self.raw_node_feat_size))
+        all_next_hop_indices = tf.placeholder(tf.int32, shape=(None, None), name="all_next_hop_indices")
+        all_policy_features = tf.placeholder(tf.float32, shape=(None, self.policy_feature_size), 
+            name="all_policy_features")
+        all_raw_node_features = tf.placeholder(tf.float32, shape=(None, None, self.raw_node_feat_size),
+            name="all_raw_node_features")
 
         flow_id = tf.constant(0)
         cond = lambda i, topo, anhi, apf, arnf, nfl, nhfl, pfl : tf.less(i, num_flows)
@@ -201,8 +203,8 @@ class Brain:
         next_hop_features = tf.expand_dims(next_hop_features, 0)
         logging.debug("BRAIN: TF: All Flows Priority Features: %s", priority_features)
         logging.debug("BRAIN: TF: All Flows Next Hop Features: %s", next_hop_features)
-        actual_probabilities = tf.placeholder(tf.float32, shape=(None,None))
-        actual_rewards = tf.placeholder(tf.float32, shape=(None,1))
+        actual_probabilities = tf.placeholder(tf.float32, shape=(None, None), name="probabilities")
+        actual_rewards = tf.placeholder(tf.float32, shape=(None, 1), name="rewards")
         
         with tf.variable_scope("reward_model", reuse=tf.AUTO_REUSE):
             if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
@@ -335,7 +337,6 @@ class Brain:
             reward = reward + self.gamma_n * avg_reward * np.array([state_masks[i]])
             logging.info("OPTIMIZER: Reward: %s, Shape: %s", reward, reward.shape)
             
-
             logging.info("==================START TRAINING=================")
             feed_dict[actual_probabilities] = action
             feed_dict[actual_rewards] = reward
@@ -344,7 +345,8 @@ class Brain:
                 logging.debug("OPTIMIZER: FEED_DICT: %s", feed_dict)
                 start_time = timer()
                 # grads_and_vars = self.optimizer.compute_gradients(loss_total)
-                m = self.session.run([minimize], feed_dict=feed_dict)
+                grads = tf.gradients(loss_total, tf.trainable_variables())
+                m, g = self.session.run([minimize, grads], feed_dict=feed_dict)
                 end_time = timer()
                 logging.info("OPTIMIZER: Time to run Training Graph: %s", (end_time - start_time))
             # gv = np.array(gv)
