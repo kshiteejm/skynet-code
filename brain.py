@@ -74,7 +74,7 @@ class Brain:
         return [tf.add(index, 1), 
         tf.concat([new_node_feature, out_features], axis=0), raw_node_features, node_features, topology]
 
-    ` featurize for a single flow graph
+    # featurize for a single flow graph
     def _build_featurize_graph(self, topology, input_node_features):
         all_node_features = tf.zeros((tf.shape(topology)[0], self.node_feature_size))
         for _ in range(self.gnn_rounds):
@@ -343,12 +343,12 @@ class Brain:
             with self.default_graph.as_default():
                 logging.debug("OPTIMIZER: FEED_DICT: %s", feed_dict)
                 start_time = timer()
-                grads_and_vars = self.optimizer.compute_gradients(loss_total)
-                m, gv = self.session.run([minimize, grads_and_vars], feed_dict=feed_dict)
+                # grads_and_vars = self.optimizer.compute_gradients(loss_total)
+                m = self.session.run([minimize], feed_dict=feed_dict)
                 end_time = timer()
                 logging.info("OPTIMIZER: Time to run Training Graph: %s", (end_time - start_time))
-            gv = np.array(gv)
-            grad = grad + gv[:, 0]
+            # gv = np.array(gv)
+            # grad = grad + gv[:, 0]
             count += len(states[i])
             logging.info("==================END TRAINING=================")
         return grad, count
