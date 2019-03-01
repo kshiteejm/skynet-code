@@ -8,7 +8,6 @@ from timeit import default_timer as timer
 
 import numpy as np
 import tensorflow as tf
-# from tensorflow.python import debug as tf_debug
 
 from environment import Environment
 from constants import GAMMA, LEARNING_RATE, N_STEP_RETURN, MIN_BATCH, LOSS_V, LOSS_ENTROPY, \
@@ -16,7 +15,6 @@ from constants import GAMMA, LEARNING_RATE, N_STEP_RETURN, MIN_BATCH, LOSS_V, LO
                     RAW_NODE_FEATURE_SIZE
 
 class Brain:
-    # train_queue = [ [[], [], []], [], [], [[], [], []], [] ]    # s, a, r, s', s' terminal mask
     train_queue = [ [], [], [], [], [] ]
     lock_queue = threading.Lock()
     lock_model = threading.Lock()
@@ -65,8 +63,6 @@ class Brain:
                 self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_neighbors")
             dense_node_layer = tf.layers.dense(tf.expand_dims(raw_node_feature, 0),
                 self.node_feature_size, activation=tf.nn.relu, name="dense_featurize_node")
-            # dense_neighbor_layer = tf.squeeze(dense_neighbor_layer, axis=[0])
-            # dense_node_layer = tf.squeeze(dense_node_layer, axis=[0])
             updated_node_feature = tf.reduce_sum([dense_node_layer, dense_neighbor_layer], axis=0)
             return updated_node_feature
 
@@ -78,9 +74,8 @@ class Brain:
         return [tf.add(index, 1), 
         tf.concat([new_node_feature, out_features], axis=0), raw_node_features, node_features, topology]
 
-    # featurize for a single flow graph
+    ` featurize for a single flow graph
     def _build_featurize_graph(self, topology, input_node_features):
-        # input_node_features = tf.placeholder(tf.float32, shape=(tf.shape(topology)[0], self.raw_node_feature_size))
         all_node_features = tf.zeros((tf.shape(topology)[0], self.node_feature_size))
         for _ in range(self.gnn_rounds):
             node_index = tf.constant(0)
@@ -93,7 +88,6 @@ class Brain:
                 shape_invariants=[node_index.get_shape(), tf.TensorShape([None, self.node_feature_size]),
                     input_node_features.get_shape(), all_node_features.get_shape(), topology.get_shape()])
             all_node_features = next_node_features
-            # print(all_node_features)
         return all_node_features
 
     def _build_next_hop_priority_graph(self, inputs):
@@ -173,10 +167,10 @@ class Brain:
         
 
     def _build_next_hop_policy_graph(self):
-        topology = tf.placeholder(tf.float32, shape=(None, None)) # topology = state["topology"]
-        num_flows = tf.placeholder(tf.int32) #state["isolation"].shape[0]
+        topology = tf.placeholder(tf.float32, shape=(None, None))
+        num_flows = tf.placeholder(tf.int32)
         
-        all_next_hop_indices = tf.placeholder(tf.int32, shape=(None, None)) #state["next_hop_indices"]
+        all_next_hop_indices = tf.placeholder(tf.int32, shape=(None, None))
         all_policy_features = tf.placeholder(tf.float32, shape=(None, self.policy_feature_size))
         all_raw_node_features = tf.placeholder(tf.float32, shape=(None, None, self.raw_node_feat_size))
 
@@ -220,14 +214,12 @@ class Brain:
                     next_hop_features, ":Shape:", tf.shape(next_hop_features))
                 with tf.control_dependencies([print_op_0, print_op_1, print_op_2]):
                     avg_next_hop_features = tf.reduce_mean(next_hop_features, axis=1)
-                    # avg_next_hop_features = tf.expand_dims(avg_next_hop_features, 0)
                     logging.debug("BRAIN: TF: All Flows Avg Hop Features: %s", avg_next_hop_features)
                     dense_reward_layer = tf.layers.dense(avg_next_hop_features, self.net_width, 
                         activation=tf.nn.relu, name="dense_policy_1")
                     avg_rewards = tf.layers.dense(dense_reward_layer, 1, name="reward") # linear activation
             else:
                 avg_next_hop_features = tf.reduce_mean(next_hop_features, axis=1)
-                # avg_next_hop_features = tf.expand_dims(avg_next_hop_features, 0)
                 logging.debug("BRAIN: TF: All Flows Avg Hop Features: %s", avg_next_hop_features)
                 dense_reward_layer = tf.layers.dense(avg_next_hop_features, self.net_width, 
                     activation=tf.nn.relu, name="dense_policy_1")
@@ -276,25 +268,20 @@ class Brain:
             axis=1, keepdims=True) # maximize entropy (regularization)
         loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
         self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate, decay=.99)
-        with tf.variable_scope("optimize_function", reuse=tf.AUTO_REUSE):
-            grads_and_vars = self.optimizer.compute_gradients(loss_total)
-            minimize = self.optimizer.minimize(loss_total)
-
-        if not self.initialized:
-            self.session.run(tf.global_variables_initializer())
-            self.initialized = True
         
+        minimize = self.optimizer.minimize(loss_total)        
+
         return (topology, num_flows, all_next_hop_indices,
                 all_raw_node_features, all_policy_features, 
                 actual_probabilities, actual_rewards, minimize, 
-                next_hop_probabilities, avg_rewards, grads_and_vars)
+                next_hop_probabilities, avg_rewards, loss_total)
 
     def optimize(self):
         (topology, num_flows, all_next_hop_indices,
             all_raw_node_features, all_policy_features, 
             actual_probabilities, actual_rewards, minimize, 
             next_hop_probabilities,
-            avg_rewards, grads_and_vars) = self.next_hop_policy_graph
+            avg_rewards, loss_total) = self.next_hop_policy_graph
         if len(self.train_queue[0]) < self.min_batch:
             time.sleep(0)
             return 0.0, 0
@@ -306,7 +293,7 @@ class Brain:
             states, actions, rewards, states_, state_masks = self.train_queue
             self.train_queue = [ [], [], [], [], [] ]
         
-        self.train_iteration = self.train_iteration + 1
+            self.train_iteration = self.train_iteration + 1
 
         logging.info("OPTIMIZER: =================================== BEGINS ===================================")
 
@@ -333,7 +320,6 @@ class Brain:
             action = np.vstack([actions[i]])
             reward = np.vstack([rewards[i]])
             raw_node_feature_list_ = states_[i][0]["raw_node_feature_list"]
-            # exit(1)
 
             logging.debug("OPTIMIZER: Raw Node Feature List Shape: %s", raw_node_feature_list.shape)
             logging.debug("OPTIMIZER: Action: %s, Shape: %s", action, action.shape)
@@ -351,18 +337,19 @@ class Brain:
             
 
             logging.info("==================START TRAINING=================")
-            # with self.lock_model:
+            feed_dict[actual_probabilities] = action
+            feed_dict[actual_rewards] = reward
+            
             with self.default_graph.as_default():
-                feed_dict[actual_probabilities] = action
-                feed_dict[actual_rewards] = reward
                 logging.debug("OPTIMIZER: FEED_DICT: %s", feed_dict)
                 start_time = timer()
+                grads_and_vars = self.optimizer.compute_gradients(loss_total)
                 m, gv = self.session.run([minimize, grads_and_vars], feed_dict=feed_dict)
                 end_time = timer()
                 logging.info("OPTIMIZER: Time to run Training Graph: %s", (end_time - start_time))
-                gv = np.array(gv)
-                grad = grad + gv[:, 0]
-                count += len(states[i])
+            gv = np.array(gv)
+            grad = grad + gv[:, 0]
+            count += len(states[i])
             logging.info("==================END TRAINING=================")
         return grad, count
 
@@ -382,36 +369,31 @@ class Brain:
                 self.train_queue[4].append([1.])
 
     def predict(self, state):
-        # with self.default_graph.as_default():
-        (topology, num_flows, all_next_hop_indices,
-            all_raw_node_features, all_policy_features, 
-            _, _, _,next_hop_probabilities_estimate,
-            avg_rewards_estimate, _) = self.next_hop_policy_graph
+        with self.default_graph.as_default():
+            (topology, num_flows, all_next_hop_indices,
+                all_raw_node_features, all_policy_features, 
+                _, _, _,next_hop_probabilities_estimate,
+                avg_rewards_estimate, _) = self.next_hop_policy_graph
 
-        feed_dict = {
-            topology: state["topology"],
-            num_flows: state["num_flows"],
-            all_next_hop_indices: state["next_hop_indices"],
-            all_policy_features: Environment.getPolicyFeatures(state),
-            all_raw_node_features: np.array(state["raw_node_feature_list"])
-        }
+            feed_dict = {
+                topology: state["topology"],
+                num_flows: state["num_flows"],
+                all_next_hop_indices: state["next_hop_indices"],
+                all_policy_features: Environment.getPolicyFeatures(state),
+                all_raw_node_features: np.array(state["raw_node_feature_list"])
+            }
 
-        probabilities = self.session.run(next_hop_probabilities_estimate, feed_dict=feed_dict)
-        avg_reward = self.session.run(avg_rewards_estimate, feed_dict=feed_dict)
+            probabilities = self.session.run(next_hop_probabilities_estimate, feed_dict=feed_dict)
+            avg_reward = self.session.run(avg_rewards_estimate, feed_dict=feed_dict)
 
         return probabilities, avg_reward
 
     def predict_prob(self, state):
-        # with self.lock_model:
         with self.default_graph.as_default():
             logging.debug("BRAIN: Predicting Action Space PDF.")
-            # logging.debug("Shape of Raw Node Feature List: %s", state["raw_node_feature_list"].shape)
-            # start_time = timer()
             (topology, num_flows, all_next_hop_indices,
                 all_raw_node_features, all_policy_features, 
                 _, _, _, next_hop_probabilities_estimate, _, _) = self.next_hop_policy_graph
-            # end_time = timer()
-            # logging.info("BRAIN: Time to Build Action Space PDF Graph: %s", (end_time - start_time))
 
             feed_dict = {
                 topology: state["topology"],
@@ -428,16 +410,11 @@ class Brain:
             return probabilities
 
     def predict_avg_reward(self, state):
-        # with self.lock_model:
         with self.default_graph.as_default():
             logging.debug("BRAIN: Predicting Expected Reward.")
-            # logging.debug("Shape of Raw Node Feature List: %s", state["raw_node_feature_list"].shape)
-            # start_time = timer()
             (topology, num_flows, all_next_hop_indices,
                 all_raw_node_features, all_policy_features, 
                 _, _, _, _, avg_rewards_estimate, _) = self.next_hop_policy_graph
-            # end_time = timer()
-            # logging.info("BRAIN: Time to Build Expected Reward Graph: %s", (end_time - start_time))
 
             feed_dict = {
                 topology: state["topology"],
