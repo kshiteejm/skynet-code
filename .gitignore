@@ -107,6 +107,9 @@ venv.bak/
 # mkdocs documentation
 /site
 
+# swap file
+*.swp
+
 # mypy
 .mypy_cache/
 .dmypy.json
