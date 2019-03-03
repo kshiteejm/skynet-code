@@ -271,12 +271,20 @@ class Brain:
         loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
         self.optimizer = tf.train.RMSPropOptimizer(self.learning_rate, decay=.99)
         
-        minimize = self.optimizer.minimize(loss_total)        
+        # grads_and_vars = self.optimizer.compute_gradients(loss_total) #, tf.trainable_variables())
+        # minimize = self.optimizer.minimize(loss_total)
+        # minimize = grads_and_vars
+        minimize = self.minimize(loss_total)
 
         return (topology, num_flows, all_next_hop_indices,
                 all_raw_node_features, all_policy_features, 
                 actual_probabilities, actual_rewards, minimize, 
                 next_hop_probabilities, avg_rewards, loss_total)
+
+    def minimize(self, loss):
+        grads_and_vars = self.optimizer.compute_gradients(loss)
+        apply = self.optimizer.apply_gradients(grads_and_vars)
+        return grads_and_vars, apply
 
     def optimize(self):
         (topology, num_flows, all_next_hop_indices,
@@ -341,16 +349,23 @@ class Brain:
             feed_dict[actual_probabilities] = action
             feed_dict[actual_rewards] = reward
             
-            with self.default_graph.as_default():
-                logging.debug("OPTIMIZER: FEED_DICT: %s", feed_dict)
-                start_time = timer()
-                # grads_and_vars = self.optimizer.compute_gradients(loss_total)
-                grads = tf.gradients(loss_total, tf.trainable_variables())
-                m, g = self.session.run([minimize, grads], feed_dict=feed_dict)
-                end_time = timer()
-                logging.info("OPTIMIZER: Time to run Training Graph: %s", (end_time - start_time))
-            # gv = np.array(gv)
-            # grad = grad + gv[:, 0]
+            # with self.default_graph.as_default():
+            logging.debug("OPTIMIZER: FEED_DICT: %s", feed_dict)
+            start_time = timer()
+            
+            # grads = tf.gradients(loss_total, tf.trainable_variables())
+            # gv = self.session.run([grads_and_vars], feed_dict=feed_dict)
+            grads_and_vars = []
+            for g in gv:
+                if g[0] == None:
+                    continue
+                grads_and_vars.append(g)
+            # gv, m = self.session.run([minimize], feed_dict=feed_dict)
+            end_time = timer()
+            logging.info("OPTIMIZER: Time to run Training Graph: %s", (end_time - start_time))
+            logging.debug("OPTIMIZER: Grads and Vars: %s", gv)
+            gv = np.array(gv)
+            grad = grad + gv[:, 0]
             count += len(states[i])
             logging.info("==================END TRAINING=================")
         return grad, count
