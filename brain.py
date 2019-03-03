@@ -355,11 +355,13 @@ class Brain:
             
             # grads = tf.gradients(loss_total, tf.trainable_variables())
             # gv = self.session.run([grads_and_vars], feed_dict=feed_dict)
+            gv, loss_minimize = minimize
             grads_and_vars = []
             for g in gv:
                 if g[0] == None:
                     continue
                 grads_and_vars.append(g)
+            gv, m = self.session.run([grads_and_vars, loss_minimize], feed_dict=feed_dict)
             # gv, m = self.session.run([minimize], feed_dict=feed_dict)
             end_time = timer()
             logging.info("OPTIMIZER: Time to run Training Graph: %s", (end_time - start_time))
