@@ -51,13 +51,13 @@ class Agent:
         next(Agent.FRAMES)
 
         if random.random() < eps and not self.test:
-            action = self.env.get_random_next_hop()
+            action = self.env.get_random_next_hop(flow_id=state["flow_id_current"])
             return action, True
         else:
             # logging.debug("AGENT: Next Hop Indices: %s", state["next_hop_indices"])
             # state = np.array([state])
             probabilities = self.brain.predict_prob(state)[0]
-            action = self.env.get_random_next_hop(p=probabilities)
+            action = self.env.get_random_next_hop(p=probabilities, flow_id=state["flow_id_current"])
             return action, False
     
     def train(self, state, action, reward, state_):

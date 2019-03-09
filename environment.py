@@ -160,6 +160,8 @@ class Environment(threading.Thread):
     def getPolicyFeatures(state):
         num_flows = state['num_flows']
         isolation = state['isolation']
+        flow_id_current = state["flow_id_current"]
+
         print('ISOLATION', num_flows, isolation.shape, ISOLATION_PROJ.shape)
         isolation = ISOLATION_PROJ[:, :num_flows] @ isolation
         print(isolation.shape)
@@ -176,5 +178,7 @@ class Environment(threading.Thread):
 
         policy_features = np.vstack([isolation, reachability, id_one_hot]).transpose()
         print(policy_features.shape)
+
+        policy_features = np.array([policy_features[flow_id_current-1]])
 
         return policy_features

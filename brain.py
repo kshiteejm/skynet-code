@@ -169,7 +169,7 @@ class Brain:
     def _build_next_hop_policy_graph(self):
         topology = tf.placeholder(tf.float32, shape=(None, None), name="topology")
         num_flows = tf.placeholder(tf.int32, name="num_flows")
-        
+
         all_next_hop_indices = tf.placeholder(tf.int32, shape=(None, None), name="all_next_hop_indices")
         all_policy_features = tf.placeholder(tf.float32, shape=(None, self.policy_feature_size), 
             name="all_policy_features")
@@ -318,7 +318,8 @@ class Brain:
 
             feed_dict = {
                 topology: states[i][0]["topology"],
-                num_flows: states[i][0]["num_flows"],
+                # num_flows: states[i][0]["num_flows"],
+                num_flows: 1,
                 all_next_hop_indices: states[i][0]["next_hop_indices"],
                 all_policy_features: Environment.getPolicyFeatures(states[i][0]),
                 all_raw_node_features: np.array(states[i][0]["raw_node_feature_list"])
@@ -396,7 +397,8 @@ class Brain:
 
             feed_dict = {
                 topology: state["topology"],
-                num_flows: state["num_flows"],
+                # num_flows: state["num_flows"],
+                num_flows: 1,
                 all_next_hop_indices: state["next_hop_indices"],
                 all_policy_features: Environment.getPolicyFeatures(state),
                 all_raw_node_features: np.array(state["raw_node_feature_list"])
@@ -416,7 +418,8 @@ class Brain:
 
             feed_dict = {
                 topology: state["topology"],
-                num_flows: state["num_flows"],
+                # num_flows: state["num_flows"],
+                num_flows: 1,
                 all_next_hop_indices: state["next_hop_indices"],
                 all_policy_features: Environment.getPolicyFeatures(state),
                 all_raw_node_features: np.array(state["raw_node_feature_list"])
@@ -437,7 +440,8 @@ class Brain:
 
             feed_dict = {
                 topology: state["topology"],
-                num_flows: state["num_flows"],
+                # num_flows: state["num_flows"],
+                num_flows: 1,
                 all_next_hop_indices: state["next_hop_indices"],
                 all_policy_features: Environment.getPolicyFeatures(state),
                 all_raw_node_features: np.array(state["raw_node_feature_list"])
