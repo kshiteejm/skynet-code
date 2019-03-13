@@ -17,6 +17,7 @@ class FlowGraph:
         self.dst = dst
         self.curr_node = src
         self.done = False
+        self.unreachable = False
 
     ''' Input : Network Graph.
         Output: Network Graph 
@@ -30,6 +31,17 @@ class FlowGraph:
         g.node[src]["visited"] = 1
         return g
     
+    ''' API's exposed to environment:
+        1. step(action): 
+           take action on flow graph.
+        2. get_next_hops(): 
+           get set of valid next hops.
+        3. get_raw_node_features(): 
+           get raw node features for all 
+           nodes in the flow graph. 
+        4. get_topology(): 
+           get adjacency matrix for the 
+           flow graph. '''
     def step(self, action_node):
         g = self.graph
         dst = self.dst
@@ -45,7 +57,10 @@ class FlowGraph:
         dst = self.dst
         reachable_to_dst_next_hops = []
 
-        can_visit_nodes = [n for n, d in g.nodes(data=True) if d["visited"] == 0 and d["isolated"] == 0]
+        can_visit_nodes = [
+            n for n, d in g.nodes(data=True) 
+            if d["visited"] == 0 and d["isolated"] == 0
+        ]
         sg = g.subgraph(can_visit_nodes)
         
         next_hop_iterator = g.neighbors(curr_node)
@@ -53,14 +68,19 @@ class FlowGraph:
             if next_hop in sg:
                 if nx.has_path(sg, next_hop, dst):
                     reachable_to_dst_next_hops.append(next_hop)
-        return reachable_to_dst_next_hops
+        
+        if len(reachable_to_dst_next_hops) == 0:
+            self.unreachable = True
+            self.done = True
+        
+        return self.unreachable, reachable_to_dst_next_hops
     
     def get_raw_node_features(self):
         g = self.graph
         raw_node_feature_names = self.raw_node_feature_names
         num_nodes = g.number_of_nodes()
         raw_node_feature_size = len(raw_node_feature_names)
-        raw_node_features = np.zeros(num_nodes, raw_node_feature_size)
+        raw_node_features = np.zeros((num_nodes, raw_node_feature_size))
         for n in g.nodes():
             for i in range(len(raw_node_feature_names)):
                 raw_node_features[n][i] = g.node[n][raw_node_feature_names[i]]
@@ -69,6 +89,9 @@ class FlowGraph:
     def get_topology(self):
         g = self.graph
         return nx.to_numpy_array(g)
+
+    def is_done(self):
+        return self.done
     
     def reset(self):
         self.__init__(self.graph, self.src, self.dst)

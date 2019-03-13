@@ -1,30 +1,74 @@
 import networkx as nx
+import random
 
 class NetworkGraph:
     ''' Generates the Network Topology Graph.
         The possible choices are -
-        <1> RandomEdgeTopo(n, p): 
+        1. RandomEdgeTopo(n, p): 
         Graph with n nodes and sampling from 
         all possible edges with p probability
-        <2> RandomGraphTopo(n, m): 
+        2. RandomGraphTopo(n, m): 
         Graph with n nodes and m edges 
         randomly sampled
-        <3> FatTreeTopo(k): 
+        3. FatTreeTopo(k): 
         Graph of fat-tree configuration with 
         k pods '''
     
-    def __init__(self, type='FatTree', kwargs={"pods": 4}):
-        self.graph = self.create_graph(type, kwargs)
+    def __init__(self, topo_type='FatTree', kwargs={"pods": 4}):
+        self.graph = self.create_graph(topo_type, kwargs)
 
-    def create_graph(self, type, kwargs):
+    def create_graph(self, topo_type, kwargs):
         graph = None
-        if type == 'RandomEdge':
+        if topo_type == 'RandomEdge':
             graph = self.random_edge_topo(**kwargs)
-        if type == 'RandomGraph':
+        if topo_type == 'RandomGraph':
             graph = self.random_graph_topo(**kwargs)
-        if type == 'FatTree':
+        if topo_type == 'FatTree':
             graph = self.fat_tree_topo(**kwargs)
         return graph
+    
+    ''' Sample flow src, dst nodes so that 
+        each flow is reachable. '''
+    def get_flows(self, num_flows):
+        flows = {}
+        flow_id = 0
+        while flow_id < num_flows:
+            flow = self.get_one_flow()
+            while flow in flows:
+                flow = self.get_one_flow()
+            flows[flow_id] = flow
+            flow_id += 1
+        return flows
+
+    def get_one_flow(self):
+        g = self.graph
+        src = random.choice(list(g.nodes()))
+        dst = random.choice(list(g.nodes()))
+        while src == dst or not nx.has_path(g, src, dst):
+            src = random.choice(g.nodes())
+            dst = random.choice(g.nodes())
+        return (src, dst)
+
+    ''' Generate solvable node isolation constraints. '''
+    def get_node_isolations(self, flows, num_constraints):
+        g = self.graph
+        isolations = []
+        while len(isolations) < num_constraints:
+            flow_id, (src, dst) = random.choice(list(flows.items()))
+            nodes = set(g.nodes())
+            shortest_path_nodes = nx.shortest_path(g, src, dst)
+            nodes = nodes.difference(shortest_path_nodes)
+            sg = g.subgraph(nodes)
+            is_isolated = False
+            for other_flow_id, (src, dst) in flows.items():
+                if flow_id != other_flow_id and nx.has_path(sg, src, dst):
+                    is_isolated = True
+                    break
+            if is_isolated and \
+               not (flow_id, other_flow_id) in isolations and \
+               not (other_flow_id, flow_id) in isolations:
+                isolations.append((flow_id, other_flow_id))
+        return isolations
 
     def random_edge_topo(self, nodes, prob):
         return nx.gnp_random_graph(nodes, prob) 
