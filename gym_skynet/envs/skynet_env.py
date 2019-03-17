@@ -133,7 +133,7 @@ class SkynetEnv(gym.Env):
             isolation=np.zeros((self.num_flows, self.num_flows)),
             raw_node_feature_list=np.zeros((self.num_flows, self.num_switches, self.raw_node_feature_size)),
             # next_hop_features=np.array([]),
-            next_hop_indices=np.array([])
+            next_hop_indices=np.array([]),
             flow_id_current=self.flow_id_current
         )
         

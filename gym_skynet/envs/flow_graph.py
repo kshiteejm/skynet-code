@@ -2,12 +2,14 @@ import networkx as nx
 import numpy as np
 
 class FlowGraph:
-    ''' Generates the Flow Graph. 
-        Each flow has its own instance 
-        of a network graph. 
-        This graph contains the flow 
-        details and the 
-        raw node features. '''
+    ''' 
+    Generates the Flow Graph. 
+    Each flow has its own instance 
+    of a network graph. 
+    This graph contains the flow 
+    details and the 
+    raw node features. 
+    '''
     # raw_edge_feature_names = ["visited", "isolated"]
     raw_node_feature_names = ["visited", "isolated"]
 
@@ -19,10 +21,13 @@ class FlowGraph:
         self.done = False
         self.unreachable = False
 
-    ''' Input : Network Graph.
-        Output: Network Graph 
-                with initialized
-                raw features. '''
+    ''' 
+    Input : Network Graph.
+    Output: Network Graph 
+            with initialized
+            raw features a.k.a.
+            Flow Graph.
+    '''
     def init_graph(self, graph, src):
         g = graph.copy()
         for n in g.nodes():
@@ -31,17 +36,22 @@ class FlowGraph:
         g.node[src]["visited"] = 1
         return g
     
-    ''' API's exposed to environment:
-        1. step(action): 
-           take action on flow graph.
-        2. get_next_hops(): 
-           get set of valid next hops.
-        3. get_raw_node_features(): 
-           get raw node features for all 
-           nodes in the flow graph. 
-        4. get_topology(): 
-           get adjacency matrix for the 
-           flow graph. '''
+    ''' 
+    API's exposed to environment:
+    1. step(node): 
+       mark next hop node on flow graph.
+    2. set_isolated_node(node):
+       mark given node as isolated because 
+       of isolation contraint in environment.
+    3. get_next_hops(): 
+       get set of valid next hops.
+    4. get_raw_node_features(): 
+       get raw node features for all 
+       nodes in the flow graph. 
+    5. get_topology(): 
+       get adjacency matrix for the 
+       flow graph. 
+    '''
     def step(self, action_node):
         g = self.graph
         dst = self.dst
@@ -50,6 +60,10 @@ class FlowGraph:
         if action_node == dst:
             self.done = True
         return self.done
+    
+    def set_isolated_node(self, isolated_node):
+        g = self.graph
+        g.node[isolated_node]["isolated"] = 1
 
     def get_next_hops(self):
         g = self.graph

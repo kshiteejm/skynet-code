@@ -2,17 +2,19 @@ import networkx as nx
 import random
 
 class NetworkGraph:
-    ''' Generates the Network Topology Graph.
-        The possible choices are -
-        1. RandomEdgeTopo(n, p): 
-        Graph with n nodes and sampling from 
-        all possible edges with p probability
-        2. RandomGraphTopo(n, m): 
-        Graph with n nodes and m edges 
-        randomly sampled
-        3. FatTreeTopo(k): 
-        Graph of fat-tree configuration with 
-        k pods '''
+    ''' 
+    Generates the Network Topology Graph.
+    The possible choices are -
+    1. RandomEdgeTopo(n, p): 
+    Graph with n nodes and sampling from 
+    all possible edges with p probability
+    2. RandomGraphTopo(n, m): 
+    Graph with n nodes and m edges 
+    randomly sampled
+    3. FatTreeTopo(k): 
+    Graph of fat-tree configuration with 
+    k pods 
+    '''
     
     def __init__(self, topo_type='FatTree', kwargs={"pods": 4}):
         self.graph = self.create_graph(topo_type, kwargs)
@@ -27,8 +29,10 @@ class NetworkGraph:
             graph = self.fat_tree_topo(**kwargs)
         return graph
     
-    ''' Sample flow src, dst nodes so that 
-        each flow is reachable. '''
+    ''' 
+    Sample flow src, dst nodes so that 
+    each flow is reachable. 
+    '''
     def get_flows(self, num_flows):
         flows = {}
         flow_id = 0
@@ -49,7 +53,9 @@ class NetworkGraph:
             dst = random.choice(g.nodes())
         return (src, dst)
 
-    ''' Generate solvable node isolation constraints. '''
+    ''' 
+    Generate solvable node isolation constraints. 
+    '''
     def get_node_isolations(self, flows, num_constraints):
         g = self.graph
         isolations = []
@@ -68,7 +74,16 @@ class NetworkGraph:
                not (flow_id, other_flow_id) in isolations and \
                not (other_flow_id, flow_id) in isolations:
                 isolations.append((flow_id, other_flow_id))
-        return isolations
+        per_flow_node_isolations = {}
+        for isolation in isolations:
+            (flow_id_1, flow_id_2) = isolation
+            if flow_id_1 not in per_flow_node_isolations:
+                per_flow_node_isolations[flow_id_1] = []
+            if flow_id_2 not in per_flow_node_isolations:
+                per_flow_node_isolations[flow_id_2] = []
+            per_flow_node_isolations[flow_id_1].append(flow_id_2)
+            per_flow_node_isolations[flow_id_2].append(flow_id_1)
+        return per_flow_node_isolations
 
     def random_edge_topo(self, nodes, prob):
         return nx.gnp_random_graph(nodes, prob) 
