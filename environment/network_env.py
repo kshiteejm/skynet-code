@@ -7,6 +7,10 @@ class NetworkEnv():
 
     def __init__(self, topo_type="FatTree", kwargs={"pods": 4}, 
                  num_flows=10, num_node_isolations=2):
+        self.topo_type = topo_type
+        self.kwargs = kwargs
+        self.num_flows = num_flows
+        self.num_node_isolations = num_node_isolations
         self.network_graph = NetworkGraph(topo_type, kwargs)
         self.flow_graphs, self.flows = self.init_flow_graphs(num_flows)
         self.node_isolations = self.network_graph.get_node_isolations(self.flows, num_node_isolations)
@@ -31,6 +35,31 @@ class NetworkEnv():
             flow_graph.reset()
         self.round_robin = itertools.cycle(self.flow_graphs)
         self.flow_id_current = next(self.round_robin)
+        flow_graph_current = self.flow_graphs[self.flow_id_current]
+        _, next_hops = flow_graph_current.get_next_hops()
+        state = dict(
+            topology=flow_graph_current.get_topology(),
+            raw_node_features=flow_graph_current.get_raw_node_features(),
+            next_hops=next_hops
+        )
+        return state
+    
+    def reset_hard(self):
+        self.__init__(
+            topo_type=self.topo_type, 
+            kwargs=self.kwargs, 
+            num_flows=self.num_flows, 
+            num_node_isolations=self.num_node_isolations
+        )
+        flow_graph_current = self.flow_graphs[self.flow_id_current]
+        _, next_hops = flow_graph_current.get_next_hops()
+        state = dict(
+            topology=flow_graph_current.get_topology(),
+            raw_node_features=flow_graph_current.get_raw_node_features(),
+            next_hops=next_hops
+        )
+        return state
+
     
     def get_current_flow_graph(self):
         return self.flow_graphs[self.flow_id_current]
@@ -53,6 +82,16 @@ class NetworkEnv():
             flow_graph = self.flow_graphs[flow_id]
             flow_graph.set_isolated_node(isolated_node)
 
+    '''
+    Input: action i.e. next hop node for current flow graph.
+    Control Flow:
+    1. update next hop for current flow graph
+    2. update isolation nodes for other flow graphs that are 
+       isolated from current flow
+    3. update reward based on reachability violation
+    4. get next round robin flow and return output
+    Output: next round robin flow and associated state, reward.
+    '''
     def step(self, action):
         reward = -1
         flow_graph_current = self.get_current_flow_graph()

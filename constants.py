@@ -9,12 +9,28 @@ import numpy as np
 ENV = 'Skynet-v0'
 LOG_FILE = "skynet.log"
 
+# new constants
+SUMMARY_DIR = './results'
+MODEL_DIR = './models'
+MODEL_SAVE_INTERVAL = 10
+TRAIN_EPOCHS = 1000
+TRAIN_EPISODES = 10
+TRAIN_ATTEMPTS = 5
+GAMMA = 0.99
+ENTROPY_WEIGHT = 0.1
+ENTROPY_EPS = 1e-6
+S_INFO = 4
+NN_MODEL = None
+NUM_AGENTS = 1
+RANDOM_SEED = 2
+
+# old constants
 RUN_TIME = 60
 THREADS = 1
 OPTIMIZERS = 1
 THREAD_DELAY = 0.001
 
-GAMMA = 0.99
+# GAMMA = 0.99
 N_STEP_RETURN = 1
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
