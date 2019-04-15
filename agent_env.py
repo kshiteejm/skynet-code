@@ -19,8 +19,8 @@ class Agent:
         
     def run(self):
         with tf.Session() as sess, open(SUMMARY_DIR + '/log_agent_' + str(self.agent_id), 'wb') as log_file:
-            actor = a3c.ActorNeuralNet(sess)
-            critic = a3c.CriticNeuralNet(sess)
+            actor = a3c.ActorNetwork(sess)
+            critic = a3c.CriticNetwork(sess)
 
             # synchronize local parameters with global parameters
             actor_nnet_params, critic_nnet_params = self.nnet_params_queue.get()

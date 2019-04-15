@@ -1,15 +1,17 @@
 import numpy as np
 import tensorflow as tf
-import tensorflow.contrib.layers as tl
+from tensorflow.contrib import layers as tl
 
-from constants import GAMMA, ENTROPY_WEIGHT, ENTROPY_EPS, S_INFO
+from constants import GAMMA, ENTROPY_WEIGHT, ENTROPY_EPS, S_INFO, LEARNING_RATE
 
 class ActorNetwork(object):
     """
     Input: State i.e. Current Flow Graph
     Output: PDF on Actions i.e. Next Hops for current Flow
     """
-    def __init__(self, sess, state_dim, action_dim, learning_rate):
+    def __init__(self, sess, 
+                 state_dim = [1, 1], action_dim = [1, 1], 
+                 learning_rate = LEARNING_RATE):
         self.sess = sess
         self.s_dim = state_dim
         self.a_dim = action_dim
@@ -56,7 +58,7 @@ class ActorNetwork(object):
     def create_actor_network(self):
         with tf.variable_scope('actor'):
             # brain.py network goes here
-            return out
+            return self.out
 
 
     def train(self, inputs, acts, act_grad_weights):
@@ -97,7 +99,7 @@ class CriticNetwork(object):
     Input to the network is the state, output is V(s).
     On policy: the action must be obtained from the output of the Actor network.
     """
-    def __init__(self, sess, state_dim, learning_rate):
+    def __init__(self, sess, state_dim = [1, 1], learning_rate = LEARNING_RATE):
         self.sess = sess
         self.s_dim = state_dim
         self.lr_rate = learning_rate
@@ -198,7 +200,7 @@ def compute_gradients(state_batch, action_batch, reward_batch, terminal, actor, 
     else:
         R_batch[-1, 0] = v_batch[-1, 0]  # boot strap from last state
 
-    for t in reversed(xrange(ba_size - 1)):
+    for t in reversed(range(ba_size - 1)):
         R_batch[t, 0] = reward_batch[t] + GAMMA * R_batch[t + 1, 0]
 
     td_batch = R_batch - v_batch
@@ -216,7 +218,7 @@ def discount(x, gamma):
     """
     out = np.zeros(len(x))
     out[-1] = x[-1]
-    for i in reversed(xrange(len(x)-1)):
+    for i in reversed(range(len(x)-1)):
         out[i] = x[i] + gamma*out[i+1]
     assert x.ndim >= 1
     # More efficient version:
@@ -230,7 +232,7 @@ def compute_entropy(x):
     H(x) = - sum( p * log(p))
     """
     H = 0.0
-    for i in xrange(len(x)):
+    for i in range(len(x)):
         if 0 < x[i] < 1:
             H -= x[i] * np.log(x[i])
     return H
