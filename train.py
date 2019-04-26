@@ -41,6 +41,7 @@ def main():
                     train_queues[agent_id])
             )
         )
+        # We never start the agents?
     
     # wait till all epochs are over
     coordinator.join()

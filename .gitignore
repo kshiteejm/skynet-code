@@ -137,6 +137,8 @@ skynet_venv/
 
 *.raw
 
+results
+
 # Teja's eccentricities
 yo*
 *.log

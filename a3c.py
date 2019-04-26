@@ -11,11 +11,13 @@ class ActorNetwork(object):
     """
     def __init__(self, sess, 
                  state_dim = [1, 1], action_dim = [1, 1], 
-                 learning_rate = LEARNING_RATE):
+                 learning_rate = LEARNING_RATE,
+                 hidden_layer_dimens = [32, 16]):
         self.sess = sess
         self.s_dim = state_dim
         self.a_dim = action_dim
         self.lr_rate = learning_rate
+        self.hidden_layer_dimens = hidden_layer_dimens
 
         # Create the actor network
         self.inputs = tf.placeholder(tf.float32, [None, self.s_dim])
@@ -41,12 +43,20 @@ class ActorNetwork(object):
         self.act_grad_weights = tf.placeholder(tf.float32, [None, 1])
 
         # Compute the objective (log action_vector and entropy)
-        self.obj = tf.reduce_sum(tf.multiply(
-                       tf.log(tf.reduce_sum(tf.multiply(self.out, self.acts),
-                                            reduction_indices=1, keep_dims=True)),
-                       -self.act_grad_weights)) \
-                   + ENTROPY_WEIGHT * tf.reduce_sum(tf.multiply(self.out,
-                                                           tf.log(self.out + ENTROPY_EPS)))
+        self.obj = tf.reduce_sum(
+                        tf.multiply(
+                            tf.log(
+                                tf.reduce_sum(tf.multiply(self.out, self.acts),
+                                reduction_indices=1,
+                                keep_dims=True)
+                            ), 
+                            -self.act_grad_weights
+                        )
+                    ) + ENTROPY_WEIGHT * \
+                        tf.reduce_sum(tf.multiply(
+                                        self.out, 
+                                        tf.log(self.out + ENTROPY_EPS)
+                                    ))
 
         # Combine the gradients here
         self.actor_gradients = tf.gradients(self.obj, self.network_params)
@@ -56,9 +66,33 @@ class ActorNetwork(object):
             apply_gradients(zip(self.actor_gradients, self.network_params))
 
     def create_actor_network(self):
-        with tf.variable_scope('actor'):
+        with tf.variable_scope('actor') :
             # brain.py network goes here
-            return self.out
+            
+            # Creating the hidden layers. 
+            prev_layer = self.inputs
+            prev_dimen = self.s_dim
+            
+            # Number of hidden layers can be controlled by specifying 
+            # layer dimens in hidden_layer_dimens
+            layer_number = 1 # used for naming
+            for curr_dimen in self.hidden_layer_dimens:
+                w_mat = tf.Variable(tf.random_normal([prev_dimen, curr_dimen]))
+                curr_layer = tf.nn.relu(tf.matmul(prev_layer, w_mat), 
+                                        name=("Actor_Hidden_%d" % (layer_number))
+                                    )
+
+                prev_layer = curr_layer
+                prev_dimen = curr_dimen
+                layer_number = layer_number + 1
+
+            w_out = tf.Variable(tf.random_normal([prev_dimen, self.a_dim]) )
+            out_layer = tf.nn.relu(tf.matmul(prev_layer, w_out), name="Actor_Raw_Output")
+            
+            output_probabilities = tf.nn.softmax(out_layer, name="Actor_Output_Softmaxed")
+            # Output as one-hot vector of selected action
+            # output = tf.one_hot([tf.argmax(output)], self.a_dim)
+            return output_probabilities
 
 
     def train(self, inputs, acts, act_grad_weights):
@@ -99,10 +133,14 @@ class CriticNetwork(object):
     Input to the network is the state, output is V(s).
     On policy: the action must be obtained from the output of the Actor network.
     """
-    def __init__(self, sess, state_dim = [1, 1], learning_rate = LEARNING_RATE):
+    def __init__(self, sess, 
+                 state_dim = [1, 1], 
+                 learning_rate = LEARNING_RATE,
+                 hidden_layer_dimens = [32, 16]):
         self.sess = sess
         self.s_dim = state_dim
         self.lr_rate = learning_rate
+        self.hidden_layer_dimens = hidden_layer_dimens
 
         # Create the critic network
         self.inputs = tf.placeholder(tf.float32, [None, self.s_dim])
@@ -128,7 +166,7 @@ class CriticNetwork(object):
         self.td = tf.subtract(self.td_target, self.out)
 
         # Mean square error
-        self.loss = tf.reduce_mean(tf.square(self.td_target - self.out))
+        self.loss = tf.reduce_mean(tf.square(self.td))
 
         # Compute critic gradient
         self.critic_gradients = tf.gradients(self.loss, self.network_params)
@@ -140,9 +178,25 @@ class CriticNetwork(object):
     def create_critic_network(self):
         with tf.variable_scope('critic'):
             # brain.py call here
-            out = tl.fully_connected(hid_3, 1, activation_fn=None)
+            prev_layer = self.inputs
+            prev_dimen = self.s_dim
 
-            return out
+            layer_number = 1
+            for curr_dimen in self.hidden_layer_dimens:
+                w_mat = tf.Variable(tf.random_normal([prev_dimen, curr_dimen]))
+                # Leaky RelU used because RelU would get rid of all negative values. 
+                # Reward belongs to [-Inf, Inf], so activations should be in the same range.
+                curr_layer = tf.nn.leaky_relu(tf.matmul(prev_layer, w_mat), 
+                                        name=("Critic_Hidden_%d" % (layer_number)))
+                
+                prev_layer = curr_layer
+                prev_dimen = curr_dimen
+                layer_number = layer_number + 1
+
+            w_out = tf.Variable(tf.random_normal([prev_dimen, 1]))
+            out_layer = tf.nn.leaky_relu(tf.matmul(prev_layer, w_out), name = "Critic_Output")
+
+            return out_layer
 
     def train(self, inputs, td_target):
         return self.sess.run([self.loss, self.optimize], feed_dict={
@@ -205,6 +259,8 @@ def compute_gradients(state_batch, action_batch, reward_batch, terminal, actor, 
 
     td_batch = R_batch - v_batch
 
+    # this entirely isolates actor and critic graphs
+    # Actor and critic independently act on the states.
     actor_gradients = actor.get_gradients(state_batch, action_batch, td_batch)
     critic_gradients = critic.get_gradients(state_batch, R_batch)
 
