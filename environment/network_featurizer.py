@@ -2,6 +2,9 @@ import tensorflow as tf
 
 
 class NetworkFeaturizer(object):
+
+    GRAPH_SCOPE_NAME = 'featurizer'
+
     def __init__(self,
                  sess,
                  num_nodes = 2,
@@ -24,7 +27,7 @@ class NetworkFeaturizer(object):
 
     # Creates a graph for computing features of all passed graphs.
     def create_featurizer_network(self):
-        with tf.variable_scope('featurizer', reuse=tf.AUTO_REUSE):
+        with tf.variable_scope(NetworkFeaturizer.GRAPH_SCOPE_NAME, reuse=tf.AUTO_REUSE):
             # Call featurize_one_graph_network for each graph
             output = tf.map_fn(
                         self.featurize_one_graph_network, 
