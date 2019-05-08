@@ -1,5 +1,5 @@
-from network_graph import NetworkGraph
-from flow_graph import FlowGraph
+from environment.network_graph import NetworkGraph
+from environment.flow_graph import FlowGraph
 import itertools
 
 class NetworkEnv():

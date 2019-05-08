@@ -1,4 +1,5 @@
 from environment.network_env import NetworkEnv
+from environment.network_featurizer import NetworkFeaturizer
 import a3c
 import tensorflow as tf
 import numpy as np
@@ -19,13 +20,18 @@ class Agent:
         
     def run(self):
         with tf.Session() as sess, open(SUMMARY_DIR + '/log_agent_' + str(self.agent_id), 'wb') as log_file:
-            actor = a3c.ActorNeuralNet(sess)
-            critic = a3c.CriticNeuralNet(sess)
+            # use the same featurizer for actor and critic. 
+            # Any changes made to featurizer by the critic must reflect in actor as well
+            featurizer = NetworkFeaturizer(sess) 
+
+            actor = a3c.ActorNetwork(sess, featurizer)
+            critic = a3c.CriticNetwork(sess, featurizer)
 
             # synchronize local parameters with global parameters
             actor_nnet_params, critic_nnet_params = self.nnet_params_queue.get()
             actor.set_network_params(actor_nnet_params)
             critic.set_network_params(critic_nnet_params)
+            # Not sure how to handle this! 
 
             # each epoch is with new actor - critic neural network
             for epoch in range(TRAIN_EPOCHS):
@@ -50,6 +56,8 @@ class Agent:
 
                             action_vector = np.zeros(len(action_prob))
                             action_vector[action_index] = 1
+                            # One state has only one action connected to it.
+                            # The state and action are appended to action_batch and state_batch
                             action_batch.append(action_vector)
 
                             action = state["next_hops"][action_index]
@@ -75,6 +83,7 @@ class Agent:
                 actor.set_network_params(actor_nnet_params)
                 critic.set_network_params(critic_nnet_params)
 
+
 '''
 Central Agent responsible for training every epoch.
 '''
@@ -86,8 +95,12 @@ class CentralAgent:
     
     def run(self):
         with tf.Session() as sess, open(SUMMARY_DIR + '/log_central', 'wb') as log_file:
-            actor = a3c.ActorNetwork(sess)
-            critic = a3c.CriticNetwork(sess)
+            # use the same featurizer for actor and critic.
+            # Any changes made to featurizer by the critic must reflect in actor as well
+            featurizer = NetworkFeaturizer(sess)
+
+            actor = a3c.ActorNetwork(sess, featurizer)
+            critic = a3c.CriticNetwork(sess, featurizer)
 
             summary_ops, summary_vars = a3c.build_summaries()
 
@@ -122,6 +135,9 @@ class CentralAgent:
                 for agent_id in range(NUM_AGENTS):
                     state_batch, action_batch, reward_batch, terminal = self.train_queues[agent_id].get()
 
+                    # Action_batch and State_batch pair is directly used to train our critic network. 
+                    # But, if we want the critic to learn the average reward, we should send it
+                    # an average reward of one state, right?
                     actor_gradient, critic_gradient, td_batch = \
                         a3c.compute_gradients(
                             state_batch=np.vstack(state_batch),
