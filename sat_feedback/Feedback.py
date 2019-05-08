@@ -40,6 +40,8 @@ class Feedback(object):
 				self.addIsolationConstraints(pol[1], pol[2])
 			curpol = curpol + 1
 
+		self.addPartialRouteConstraints(input.getPartial())
+
 		print self.z3Solver
 
 		self.z3Solver = Optimize()
@@ -49,6 +51,34 @@ class Feedback(object):
 		if modelsat == z3.sat :
 			fwdmodel = self.z3Solver.model()
 			print fwdmodel
+
+	# add contraints representing partial routes selected by skynet
+	def addPartialRouteConstraints(self, partial_routes):
+		# self.partial_routing = [[0, 1, 2], [0]]
+		#pol = 0
+
+		total_routes = len(partial_routes)
+
+		for pol in range(0, total_routes):
+			curpol = partial_routes[pol]
+			nodes_traversed = len(curpol)
+			if nodes_traversed == 0:
+				continue
+
+			# add partial forwarding constraint
+			parFwdAssert = True
+			for node in range(1, nodes_traversed):
+				parFwdAssert = And(parFwdAssert, self.fwdvars[curpol[node-1]][curpol[node]][pol])
+
+			self.z3Solver.add(parFwdAssert)
+
+
+			# add partial reachability constraint
+			parReachAssert = True
+			for plen in range(1, nodes_traversed+1):
+				parReachAssert = And(parReachAssert, self.reachvars[curpol[plen-1]][pol][plen])
+
+			self.z3Solver.add(parReachAssert)
 
 
 	# add reachability and waypoint constraints	
