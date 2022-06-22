@@ -36,7 +36,7 @@ Markdown==3.0.1
 matplotlib==3.0.2
 mccabe==0.6.1
 networkx==2.2
-numpy==1.16.0
+numpy==1.22.0
 parso==0.3.2
 pexpect==4.6.0
 pickleshare==0.7.5
